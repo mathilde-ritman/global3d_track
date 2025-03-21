@@ -1,0 +1,7 @@
+README.md
+setup.py
+global3d_track/__init__.py
+global3d_track.egg-info/PKG-INFO
+global3d_track.egg-info/SOURCES.txt
+global3d_track.egg-info/dependency_links.txt
+global3d_track.egg-info/top_level.txt

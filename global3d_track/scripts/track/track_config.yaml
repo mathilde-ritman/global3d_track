@@ -1,0 +1,54 @@
+# config to perform customised tracking
+
+
+overwrite: 0
+restart_checkpoints: 1
+
+data_directory: /work/bb1153/b382635/data/tobac_tracks
+feature_data_directory: /work/bb1153/b382635/data/tobac_tracks
+checkpoint_directory: /scratch/b/b382635/tracking_checkpoints
+
+region: amazon
+
+start_date: '2021-07-01 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+end_date: '2021-07-08 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+
+objects:
+  updraft:
+    name: updraft
+    shortname: u
+    tobac_config: /home/b/b382635/s/global3d_track/global3d_track/configs/core_config.yaml
+    methods: 
+      tobac: ['track',]
+      erode: False
+      connect: True
+    require_overlap: False
+    keep: True # whether to keep tracks for this object in the overall output, if True file linking will be performed on this variable 
+
+  ice:
+    name: ice
+    shortname: i
+    tobac_config: /home/b/b382635/s/global3d_track/global3d_track/configs/ice_config.yaml
+    methods:
+      tobac: ['track',]
+      erode: 0.5
+      connect: True
+    require_overlap: updraft # only keep tracks that overlap with an updraft track at some point in time
+    keep: False
+
+link:
+  order: ice->updraft
+  name: updraft_ice_only
+
+post_processing:
+  link_files: True
+  define_anvil: True
+  require_core_first: True # whether to require a core detection at the system start time
+  require_lifetime: 1 # (hours) minimum lifetime of a track in hours
+
+batch_size:
+  detect_segment: 12 # [ALSO NEEDS SETTING IN .SH] number of hours to batch process for detection and segmentation
+  track: 24 # [ALSO NEEDS SETTING IN .SH] number of hours to batch process for tracking
+  define: 4 # number of time steps to batch process for anvil base height calculations
+  filter: 4  # number of time steps to batch process for track filtering
+

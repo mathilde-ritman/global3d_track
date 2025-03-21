@@ -1,0 +1,47 @@
+# Mathilde Ritman 2023, config for performing TOBAC cloud tracking
+
+
+version_name: 'ice'
+select_data: 'cli'
+segment_data: 'cli'
+grid_spacing: 11100  # meters (for Latitude)
+time_spacing: 900 # seconds (= 15 mins)
+vertical_spacing: 300 # meters
+
+params_features: 
+  n_min_threshold: 27 # minimum number of contiguous pixels to define a feature
+  position_threshold: 'weighted_diff' # how to choose position of feature comprised of multiple pixels
+  sigma_threshold: 1 # standard deviation for intial filtering step used to smooth the feature data
+  target: "maximum"
+  min_distance: 27750 # minimum distance between detected features (m)
+  threshold: [0.000005, 0.00005] # kg/kg
+  # threshold: [0.00005, 0.0005] # kg/kg - restrictive threshold experiment
+  n_erosion_threshold: 0 # number of pixels by which to erode the identified features
+  vertical_coord: 'height'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_segmentation:
+  method: 'watershed'
+  threshold: 0.000005 # kg/kg mixing ratio
+  # threshold: 0.00005 # kg/kg mixing ratio - restrictive threshold experiment
+  target: "maximum"
+  seed_3D_flag: 'box'
+  vertical_coord: 'height'
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+
+params_linking:
+  method_linking: 'predict'
+  d_max: 100000 # set max search range (m)
+  adaptive_stop: 0.2
+  adaptive_step: 0.95
+  memory: 0
+  stubs: 3 # minimum number of timesteps of a tracked cell to be reported
+  vertical_coord: null # must be set as None when using 'dz'
+  dz: 300 # (meters) assumes constant vertical spacing
+  # PBC_flag: # whether to use periodic boundaries, and if so in which directions
+  # min_h2=0, # to use for boundaries if using PBC flag for periodic boundary across longitude
+  # max_h2=3600,
+
+savedir: "/work/bb1153/b382635/tobac_tracking"
+plotdir: "/work/bb1153/b382635/plots/icon/tobac_tracking"
