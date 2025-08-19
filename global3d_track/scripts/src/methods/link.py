@@ -15,7 +15,33 @@ from ..utils import tools
 
 def find_matches(target, cond, k):
     out = np.unique(target.where(cond == k).values)
-    return tuple(out[~np.isnan(out)])
+    return out[~np.isnan(out)]
+
+def collect_matches(k_vals, cond, before, after):
+    # where aarr contains repeated labels, update rows with repeat labels in both arrays with the union of those rows
+    barr = np.full((k_vals.size, 100), 0)
+    aarr = np.full((k_vals.size, 100), 0)
+    for i,k in enumerate(k_vals):
+        bmatches = find_matches(before, cond, k)
+        amatches = find_matches(after, cond, k)
+        barr[i,:bmatches.size] = bmatches
+        aarr[i,:amatches.size] = amatches
+    return barr, aarr
+
+def update_matches(barr, aarr):
+    # where aarr contains repeated labels, update rows with repeat labels in both arrays with the union of those rows
+    unique_vals, _, counts = np.unique(aarr, return_index=True, return_counts=True)
+    repeated_vals = unique_vals[counts>1]
+    repeated_vals = repeated_vals[repeated_vals!=0]
+    for val in repeated_vals:
+        repeat_idxs = np.where(aarr == val)[0]
+        aunion = np.unique(aarr[repeat_idxs])
+        bunion = np.unique(barr[repeat_idxs])
+        aarr[repeat_idxs, :aunion.size-1] = aunion[aunion!=0]
+        barr[repeat_idxs, :bunion.size-1] = bunion[bunion!=0]
+    aarr = np.where(aarr>0, aarr, np.nan)
+    barr = np.where(barr>0, barr, np.nan)
+    return barr, aarr
 
 def link_chunks(first_mask, next_mask, variable='system'):
 
@@ -45,34 +71,25 @@ def link_chunks(first_mask, next_mask, variable='system'):
     # create dict of label replacements
     cond = join.connected
     k_vals = np.unique(cond.values)
-    match_vals = {k: (find_matches(before, cond, k), find_matches(after, cond, k)) for k in k_vals if not np.isnan(k)}
-    # replace labels of next_mask with paired labels from first_mask
+    bmatches, amatches = collect_matches(k_vals[~np.isnan(k_vals)], cond, before, after)
+    bmatches, amatches = update_matches(bmatches, amatches)
+    # replace labels of first_mask and next_mask with paired labels from first_mask
     next_mask[variable+'_update'] = next_mask[variable+'_shift'].copy()
     first_mask[variable+'_update'] = first_mask[variable].copy()
-    for k, sys in match_vals.items():
+    for i, k in enumerate(k_vals):
         # each k is a feature label, shared (or non shared)
-        b_all, a = sys
-        text = 'keep'
-        if a:
-            a = np.nanmin(a) # grab label from tuple
-            if b_all:
-                # if feature exists in both first and next mask, replace with value from first
-                b = np.nanmin(b_all)
-                next_mask[variable+'_update'] = next_mask[variable+'_update'].where(next_mask[variable+'_shift'] != a, b)
-                text, out = 'replace', b
-            else:
-                # otherwise, no change
-                out = a
-        if len(b_all) > 1:
-            # if multiple features within the same group, replace with first feature value
-            b = np.nanmin(b_all) # get first feature label
-            first_mask[variable+'_update'] = first_mask[variable+'_update'].where(~first_mask[variable+'_update'].isin(b_all), b)
-            text, out = 'replace', b
-        elif b_all:
+        b_all = bmatches[i, :][~np.isnan(bmatches[i, :])] # coincident labels from first mask
+        a_all = amatches[i, :][~np.isnan(amatches[i, :])] # coincident labels from next mask
+        b = np.nanmin(b_all) # value from first to use as replacement
+        if np.any(a_all):
+            if np.any(b_all):
+                # if feature exists in both first and next mask, replace next with value from first
+                next_mask[variable+'_update'] = next_mask[variable+'_update'].where(~next_mask[variable+'_shift'].isin(a_all), b)
             # otherwise, no change
-            out = b_all
-        # verbose
-        # print(text, k, sys, 'as ->', np.nanmin(out))
+        if b_all.size > 1:
+            # if multiple features within the first mask, replace with chosen (minimum) value
+            first_mask[variable+'_update'] = first_mask[variable+'_update'].where(~first_mask[variable+'_update'].isin(b_all), b)
+        # otherwise, no change
             
     # 3 - collect and return updated mask
     for v in first_mask.data_vars:
