@@ -17,22 +17,20 @@ class Regrid:
     ''' Regrid ICON model to the chosen region output using nearest neighbour interpolation '''
 
     def __init__(self, region):
-        
-        if region == 'amazon':
-            self.bbox = (-83,-43,-15,15) # Amazon
-        elif region == 'congo':
-            self.bbox = (1, 41,-10,10) # Congo basin
-        elif region == 'tropics':
-            self.bbox = (-180, 180, -30, 30) # Tropics
-        elif region == 'global':
-            self.bbox = (-180, 180, -90, 90) # Global
-        elif region == 'anatomy_example':
-            self.bbox = (-78,-70,9,15) # Example from hackathon March 2024
-        elif region == 'anatomy_example_large':
-            self.bbox = (-80,-68,7,17) # Example from hackathon March 2024
+        self.named_regions = {"amazon": (-83, -43, -15, 15),
+                        "congo": (1, 41, -15, 15),
+                        "tropics": (-180, 180, -15, 15),
+                        "global": (-180, 180, -90, 90),
+                        "anatomy_example": (-78, -70, 9, 15), # Example from hackathon March 2024
+                        "anatomy_example_large": (-80, -68, 7, 17), # Example from hackathon March 2024
+                        "tcr_amazon": (280, 325, -15, 10),
+                        "tcr_congo": (0, 35, -12, 24),
+                        "tcr_warm pool": (90, 160, -15, 15),}  
+        if isinstance(region, str) and region in self.named_regions:
+            self.bbox = self.named_regions[region]
         else:
             self.bbox = region
-
+        logging.info(f"Region to regrid: {self.bbox}")
 
     def perform(self, data, zoom, resolution=0.1):
         self.pix = self._get_pix(

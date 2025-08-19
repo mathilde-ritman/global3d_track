@@ -13,7 +13,7 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
 # Specify configuration file
-yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config.yaml"
+yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
 
 # CHOOSE OPTIONS
 start_date=2021-07-01

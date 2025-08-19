@@ -50,12 +50,11 @@ def load_tobac_data(variables, region, start_date, end_date):
     # load data
     cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
     dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
-
     # process data
-    # ensure no repeats ni the variables
+    # ensure no repeats in the variables
     variables = list(set(list(variables) + ['zghalf','zg']))
-    li = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
-    relevant_data = xr.concat(li, dim='time')
+    relevant_data = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
+    # relevant_data = xr.concat(li, dim='time') - no longer needed regrid outputs ds, not list of ds
     data = preprocess_for_tobac(relevant_data)
     if 'cli' in data.data_vars and 'clw' in data.data_vars:
         data['cl'] = data.cli + data.clw

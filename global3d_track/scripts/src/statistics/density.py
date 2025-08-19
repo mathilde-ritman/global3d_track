@@ -2,15 +2,13 @@
 Mathilde Ritman 2025
 '''
 
-import xarray as xr
-import numpy as np
 import dask
-from typing import Union
 
-# diagnose model density
+# diagnose model density, mass mixing ratios, and ice water path
 
 
 def density(ds):
+    ''' uses ideal gas law to get total (dry and moist) air density '''
     # thermodynamic variables
     p = ds.pfull # Pa (kg m-1 s-2)
     T = ds.ta # K
@@ -26,23 +24,36 @@ def density(ds):
     rho = p / (Rd * T * (1 + alpha)) # kg m-3
     return rho
 
-# current version
+# get condensate concentration and path
 
 def calculate_xWC(ds, v='cli'):
-    # total density
+    # total air density
     rho = density(ds) # kg m-3
 
-    # quantity 'conetent'
+    # specific mass fractions - mass of quantity per mass of total air
     q_x = ds[v] # kg kg-1
+
+    # density of quantity (e.g., liquid water content)
     rho_x = q_x * rho # kg m-3
     return rho_x
 
 def calculate_xWP(ds, v='cli'):
-    ''' uses ideal gas law to get moist air density '''
-    # content
+    # density of quantity
     rho_x = calculate_xWC(ds, v) # kg m-3
 
-    # path
+    # total mass per tropospheric column of air (e.g., liquid water path)
     grid_depth = ds.dzghalf # m
     xWP = (rho_x * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
     return xWP
+
+def calculate_IWP(ds):
+    ''' calculate ice water path from frozen hydrometeors: ice, snow and graupel '''
+    # densities
+    q_frozen = ds['cli'] + ds['qs'] + ds['qg'] # kg kg-1
+    rho_frozen = density(ds) * q_frozen # kg m-3
+
+    # iwp
+    grid_depth = ds.dzghalf # m
+    IWP = (rho_frozen * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
+    return IWP
+
