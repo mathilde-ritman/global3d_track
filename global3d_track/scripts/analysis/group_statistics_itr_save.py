@@ -92,7 +92,7 @@ def process_file(di, file, version):
         logging.info(f"{datetime.now()} calculating statistics for each group...")
         results = joblib.Parallel(n_jobs=-1, prefer="threads")(joblib.delayed(process_group)(di, groups[k], data_i) for k in group_keys)
 
-        # save results for all groups
+        # collect and save results for all groups, one file for each group object!
         for group_id, res in zip(group_keys, results):
             for stat, res_dataset in res.items():
                 group_id = int(group_id)
@@ -159,22 +159,21 @@ def main(yaml_file, start_date, end_date):
         return utils.tools.sort_files([f for f in glob.glob(regex) if utils.tools.check_file_dates(f, start_date, end_date)])
     
     res_fname = stats_to_get[0]
-        
-    finput_regex = f"{data_dir}/*/*proc.nc" # all files in directory for the raw tracking output
-    fres_regex = f"{result_dir}/*{res_fname}*" # linked tracking results with anvil heights
+    finput_regex = f"{data_dir}/*/*proc.nc" # all files in directory for the processed tracking output
+    fres_regex = f"{result_dir}/*{res_fname}*"# stats results
     
     input_files = get_files(finput_regex)
     res_files = get_files(fres_regex)
 
     # - go
     if (overwrite or (len(res_files) < len(input_files))):
-        task_start = datetime.now()
+        task_start =  time.time()
         logging.info(f"{task_start} Commencing statistics calculation for {stats_to_get}")
 
         # compute
         for file in input_files:
             process_file(di, file, version)
-        logging.info(f"{datetime.now()} All complete. Took {datetime.now() - task_start}")
+        logging.info(f"{datetime.now()} All complete. Took {time.time() - task_start}")
 
     else:
         logging.info(f"{task_start} Statistics already complete at {result_dir}")

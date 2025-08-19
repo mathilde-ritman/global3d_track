@@ -28,6 +28,7 @@ class Erode:
         return da.where(eroded)
     
     def weighted_erode(self, da, value, dims=('lat','lon'), PBC_flag=None, parallel=True):
+        ''' da: xarray.DataArray '''
         logging.info(f"{datetime.now()} weighted eroding with value {value}")
         if parallel:
             weighted_topog = self.compute_topography_parallel(da, normalise=True, n_jobs=-1)

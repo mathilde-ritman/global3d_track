@@ -38,10 +38,11 @@ def process_group(mask, data):
     # check core exists at time t
     core_exists = (mask.u_tracks.max(('level_full','lat','lon')).values > 0)
     # ensure output shape okay
-    if len(ABH) < mask.time.size:
-        # pad end of arrays with nan
-        n_pad = mask.time.size - len(ABH)
+    if mask.time.size < data.time.size:
+        n_pad = data.time.size - len(ABH) # pad end of arrays with nan
         ABH = np.append(ABH, [np.nan] * n_pad)
+        max_cloud_height = np.append(max_cloud_height, [np.nan] * n_pad)
+        core_exists = np.append(core_exists, [np.nan] * n_pad)
     return ABH, max_cloud_height, core_exists
 
 # calculating the above
@@ -248,6 +249,7 @@ def iterate_groups_apply(di, files, anvil_tresholds, check_dir):
 
         # iterate times in file and apply threshold
         anvil_day = None
+        prev_fname = None
         for t_idx in range(0, mask_day.time.size, t_chunk):
 
             # Select time chunk
@@ -274,8 +276,12 @@ def iterate_groups_apply(di, files, anvil_tresholds, check_dir):
             anvil_day = xr.concat((anvil_day, anvil_i), dim='time') if anvil_day is not None else anvil_i
 
             # checkpoint
-            fname = f"filtered_anvil-T{pd.to_datetime(start_date).strftime('%Y%m%dT%H%M')}_T{pd.to_datetime(time_i_end).strftime('%Y%m%dT%H%M')}.nc"
+            fname = f"filtered_anvil-T{pd.to_datetime(current_day).strftime('%Y%m%dT%H%M')}_T{pd.to_datetime(time_i_end).strftime('%Y%m%dT%H%M')}"
             checkpoint.checkpoint_dataset(anvil_day.fillna(NAN).astype(np.int64), fname)
+            if prev_fname:
+                prev_fpath = checkpoint.record[prev_fname]
+                os.system(f'rm {prev_fpath}')
+            prev_fname = fname
 
             del mask_i, groups, result, anvil_i  # Free memory
 

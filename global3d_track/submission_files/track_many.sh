@@ -16,8 +16,8 @@
 yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config.yaml"
 
 # CHOOSE OPTIONS
-start_date=2021-07-02
-end_date=2021-07-06
+start_date=2021-07-01
+end_date=2021-07-08
 hours=24 # number of hours of data per job
 
 # Convert the dates to seconds since the Unix epoch

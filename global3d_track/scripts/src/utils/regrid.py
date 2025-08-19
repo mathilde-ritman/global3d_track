@@ -35,6 +35,13 @@ class Regrid:
 
 
     def perform(self, data, zoom, resolution=0.1):
+        self.pix = self._get_pix(
+            2**zoom, *self._get_latlon(self.bbox, resolution=resolution)
+        )
+        return data.isel(cell=self.pix)
+
+
+    def perform_old(self, data, zoom, resolution=0.1):
 
         # define nearest neighbour pix
         self.pix = self._get_pix(2**zoom, *self._get_latlon(self.bbox, resolution=resolution))
@@ -58,7 +65,6 @@ class Regrid:
         # select
         return data.isel(cell=self.pix)
     
-
     def _get_pix(self, nside, lon, lat):
         return xr.DataArray(
             healpy.ang2pix(nside, *np.meshgrid(lon, lat), nest=True, lonlat=True), coords=(lat, lon),

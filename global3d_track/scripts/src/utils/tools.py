@@ -94,7 +94,7 @@ def collect_tobac_features(sdir, feature_type):
         li.append(pd.read_hdf(f, 'table'))
     df = tobac.utils.general.combine_feature_dataframes(li)
     df.to_hdf(sdir + f'/{feature_type}/features.h5', 'table')
-    # collect crresponding masks in directory
+    # collect corresponding masks in directory
     fmasks = sorted(glob.glob(sdir + f'/{feature_type}/*/segmented_mask.nc'))
     m = xr.open_dataset(fmasks[0])
     for i in range(len(fmasks)-1):

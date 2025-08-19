@@ -1,17 +1,17 @@
 # config to perform customised tracking
 
 
-overwrite: 1
+overwrite: 0
 restart_checkpoints: 1
 
-data_directory: /scratch/b/b382635/tobac_tracks
-feature_data_directory: /scratch/b/b382635/tobac_tracks
+data_directory: /work/bb1153/b382635/data/tobac_tracks
+feature_data_directory: /work/bb1153/b382635/data/tobac_tracks
 checkpoint_directory: /scratch/b/b382635/tracking_checkpoints
 
-region: anatomy_example_large
+region: amazon
 
 start_date: '2021-07-01 00:00:00' # [ALSO NEEDS SETTING IN .SH]
-end_date: '2021-07-03 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+end_date: '2021-07-08 00:00:00' # [ALSO NEEDS SETTING IN .SH]
 
 objects:
   updraft:

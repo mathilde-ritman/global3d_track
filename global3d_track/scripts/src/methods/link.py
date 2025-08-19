@@ -84,21 +84,29 @@ def link_chunks(first_mask, next_mask, variable='system'):
             # keep new
             first_mask_updated = first_mask_updated.rename({v:v_name})
             next_mask_updated = next_mask_updated.rename({v:v_name})
+    for v in first_mask_updated.data_vars:
         if '_shift' in v:
             # drop all
+            first_mask_updated = first_mask_updated.drop_vars(v)
+    for v in next_mask_updated.data_vars:
+        if '_shift' in v:
             next_mask_updated = next_mask_updated.drop_vars(v)
 
     return first_mask_updated, next_mask_updated
 
 
 def link_files(files, vars_to_update, fname_suffix='_linked'):
+
+    NAN = -9
     
     # 2 - link chuncks
     logging.info(f"{datetime.now()} Linking tracks across time")
     # init
     if not files:
+        logging.info(f"{datetime.now()} no files passed, exiting")
         return
     if len(files) == 1:
+        logging.info(f"{datetime.now()} only one file passed, copying to {files[0].replace('.nc',f'{fname_suffix}.nc')}")
         os.system(f"scp {files[0]} {files[0].replace('.nc',f'{fname_suffix}.nc')}")
         return
     current_file = files.pop(0)
@@ -120,6 +128,6 @@ def link_files(files, vars_to_update, fname_suffix='_linked'):
             previous_mask, current_mask = link_chunks(previous_mask, current_mask, variable=v_to_link)
         files_remaining = len(files)
         # save
-        tools.compress_and_save(previous_mask.fillna(0), current_file.replace('.nc',f'{fname_suffix}.nc'))
+        tools.compress_and_save(previous_mask.fillna(NAN).astype(np.int64), current_file.replace('.nc',f'{fname_suffix}.nc'))
         current_file = next_file
-    tools.compress_and_save(current_mask.fillna(0), next_file.replace('.nc',f'{fname_suffix}.nc'))
+    tools.compress_and_save(current_mask.fillna(NAN).astype(np.int64), next_file.replace('.nc',f'{fname_suffix}.nc'))

@@ -6,15 +6,17 @@
 
 #SBATCH --job-name=track_itr
 #SBATCH --partition=compute
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --mem=250GB
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=128
+#SBATCH --cpus-per-task=2
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
  
 # takes 1hr - 1hr40min to run 1 day over the Amazon. No issues at 250 GB.
+# takes 1hr - 1hr15min to run 1 day over the Amazon with 2 nodes and 128 tasks per node and 2 cpus per task. No issues at 250 GB.
 
 module load python3 
 source /home/b/b382635/.bashrc

@@ -5,14 +5,18 @@
 # University of Oxford
 
 #SBATCH --job-name=proc
-#SBATCH --partition=shared
-#SBATCH --time=04:00:00
-#SBATCH --mem=150GB
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --partition=compute
+#SBATCH --time=08:00:00
+#SBATCH --mem=250GB
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=128
+#SBATCH --cpus-per-task=2
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/proc/job.o%j
 
+# For 7 days in the Amazon it:
+# Took approx. 1hr 40min to complete linking.
+# Took approx. 2 hours to complete the definitions for data filtering.
  
 module load python3 
 source /home/b/b382635/.bashrc

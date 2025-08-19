@@ -57,12 +57,12 @@ def track_object(di, obj_name, start_date, end_date, version):
     if final_save_dir.exists() and not overwrite:
         logging.info(f"{datetime.now()} loaded {name} tracks from {final_save_dir}")
         track_mask = xr.open_dataset(final_save_dir)
-        return track_mask.where(track_mask != NAN)
+        return track_mask.where(track_mask > 0)
     
     d = f'{name}_tracking/' # subfolder for checkpointing current object
     if checkpoint.checkpoint_reached(f'{d}tracks') and not (overwrite and restart_checkpoints):
         track_mask = checkpoint.load_dataset(f'{d}tracks', nan_value=NAN)
-        return track_mask
+        return track_mask.where(track_mask > 0)
 
     # - details
 
@@ -88,13 +88,14 @@ def track_object(di, obj_name, start_date, end_date, version):
         # track using tobac
         module = methods.tobac_wrapper.Track(None, None, tobac_config, overwrite_tracks=overwrite, track_params=modify_parameters)
         track_mask, _ = module.perform(**tobac_methods)
+        track_mask = track_mask.where(track_mask > 0)
         checkpoint.checkpoint_dataset(track_mask.fillna(NAN).astype(np.int64), f'{d}tobac_tracks')
 
     if skip_erode:
         pass
 
-    elif checkpoint.checkpoint_reached(f'{d}erode-combined_tracks'):
-        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}erode-combined_tracks', nan_value=NAN)
+    elif checkpoint.checkpoint_reached(f'{d}erode-resulting_tracks'):
+        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}erode-resulting_tracks', nan_value=NAN)
 
     else:
         if checkpoint.checkpoint_reached(f'{d}erode-erode_mask'):
@@ -103,7 +104,7 @@ def track_object(di, obj_name, start_date, end_date, version):
             # perform erosion of mask
             logging.info(f"{datetime.now()} eroding mask...")
             erody_by = obj_di['methods']['erode']
-            erode_mask = methods.Erode().weighted_erode(track_mask.feature, value=erody_by)
+            erode_mask = methods.Erode().weighted_erode(track_mask.cell.fillna(0), value=erody_by)
             checkpoint.checkpoint_dataset(erode_mask.fillna(NAN).astype(np.int64), f'{d}erode-erode_mask')
 
         if checkpoint.checkpoint_reached(f'{d}erode-erode_track'):
@@ -112,6 +113,7 @@ def track_object(di, obj_name, start_date, end_date, version):
             # track eroded mask
             logging.info(f"{datetime.now()} tracking eroded mask...")
             erode_track = methods.misc.track_connected_components(erode_mask, PBC_flag=PBC_flag)
+            erode_track = erode_track.where(erode_track > 0)
             checkpoint.checkpoint_dataset(erode_track.fillna(NAN).astype(np.int64), f'{d}erode-erode_track')
         
         # share result to main mask
@@ -119,13 +121,13 @@ def track_object(di, obj_name, start_date, end_date, version):
         eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10)
         track_mask['tracks'] = eroded_tracks
 
-        checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int64), f'{d}erode-combined_tracks')
+        checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int64), f'{d}erode-resulting_tracks')
 
     if skip_contiguity:
         pass
 
-    elif checkpoint.checkpoint_reached(f'{d}connect-combined_tracks'):
-        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}connect-combined_tracks', nan_value=NAN)
+    elif checkpoint.checkpoint_reached(f'{d}connect-resulting_tracks'):
+        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}connect-resulting_tracks', nan_value=NAN)
 
     else:
         if checkpoint.checkpoint_reached(f'{d}connect-connect_track'):
@@ -143,7 +145,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         connect_tracks = methods.misc.force_consecutive_labels(connect_tracks)
         track_mask['tracks'] = connect_tracks
 
-        checkpoint.checkpoint_dataset(connect_track.fillna(NAN).astype(np.int64), f'{d}connect-combined_tracks')
+        checkpoint.checkpoint_dataset(connect_track.fillna(NAN).astype(np.int64), f'{d}connect-resulting_tracks')
 
     # final result
     logging.info(f"{datetime.now()} saving...")
@@ -172,18 +174,19 @@ def main(yaml_file, start_date, end_date):
     utils.tools.make_directories((data_dir, check_dir))
     checkpoint = Checkpoint(check_dir, overwrite = (overwrite and restart_checkpoints))
     objects_to_track = track_di['objects'].keys()
-    final_save_dir = data_dir / 'system_tracks.nc'
+    final_save_dir = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
 
     # - done already?!
         
-    if final_save_dir.exists() and not track_di['overwrite']:
+    if final_save_dir.exists() and not overwrite:
         logging.info(f"{datetime.now()} system tracks exist already at {final_save_dir}")
         exit()
 
     n = 'system/tracks' # path for checkpointing
-    if checkpoint.checkpoint_reached(n) and not ((overwrite and restart_checkpoints)):
+    if checkpoint.checkpoint_reached(n) and not restart_checkpoints:
         loc = checkpoint.record[n]
-        logging.info(f"System tracks already exist at {loc}. Exiting.")
+        result = os.system(f'scp {loc} {final_save_dir}')
+        logging.info(f"System tracks already exist at {loc}. Copied to {final_save_dir}. Exiting.")
         exit()
 
     #  - track each object as per yaml
@@ -206,13 +209,15 @@ def main(yaml_file, start_date, end_date):
             logging.info(f"{datetime.now()} requiring overlap of {obj} with {obj_di['require_overlap']}...")
             
             if checkpoint.checkpoint_reached(f'{obj}_tracking/overlap-tracks'):
-                tracked_mask[obj]['tracks'] = checkpoint.load_dataarray(f'{obj}_tracking/overlap-tracks', nan_value=NAN)
+                tracked_mask[obj]['overlap_tracks'] = checkpoint.load_dataarray(f'{obj}_tracking/overlap-tracks', nan_value=NAN)
             else:
+                # calculate
                 overlap_tracks = methods.misc.child_that_overlaps(req_mask.tracks, obj_mask.tracks)
                 checkpoint.checkpoint_dataset(overlap_tracks.fillna(NAN).astype(np.int64), f'{obj}_tracking/overlap-tracks')
-                obj_mask['overlap_tracks'] = overlap_tracks
-                checkpoint.checkpoint_dataset(obj_mask.fillna(NAN).astype(np.int64), f'{obj}_tracking/tracks')
-                tracked_mask[obj]['overlap_tracks'] = obj_mask.overlap_tracks
+                
+                # collect
+                tracked_mask[obj]['overlap_tracks'] = overlap_tracks
+                checkpoint.checkpoint_dataset(tracked_mask[obj].fillna(NAN).astype(np.int64), f'{obj}_tracking/tracks')
 
     # - link the object tracks into one big tracked system
         

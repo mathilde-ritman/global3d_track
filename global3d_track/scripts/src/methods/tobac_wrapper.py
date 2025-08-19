@@ -146,9 +146,10 @@ class Track(Connect, Helpers):
             mask_dataset['cell'] = self._table_to_dataset(table=tracks, col='cell', dataset=mask_dataset)
             mask_dataset['cell'] = mask_dataset.cell
             mask_dataset['cell'].attrs['description'] = 'tobac features after tracking'
+            mask_dataset = mask_dataset.where(mask_dataset > 0)
 
             if self.save:
-                mask_dataset.where(mask_dataset > 0, NAN).astype(np.int64).to_netcdf(Path(self.savedir_v, 'tracked_mask.nc'))
+                mask_dataset.astype(np.int64).to_netcdf(Path(self.savedir_v, 'tracked_mask.nc'))
                 tracks.to_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
                 logging.info('tracking results saved to ' + str(Path(self.savedir_v, 'tracks.h5')))
         

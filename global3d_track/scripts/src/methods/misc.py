@@ -18,7 +18,8 @@ def child_that_overlaps(parent, child):
     child_overlap = child.where(parent>0) # child features coinciding with the parent
     child_overlap = child_overlap.astype(float)
     overlapping_features = np.unique(child_overlap.values[~np.isnan(child_overlap.values)])
-    return child.where(np.isin(child, overlapping_features))
+    output = child.where(np.isin(child, overlapping_features))
+    return output.where(output>0)
     
 
 def union_all(datasets):

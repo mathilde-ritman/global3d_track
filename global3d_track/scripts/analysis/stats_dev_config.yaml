@@ -1,0 +1,34 @@
+# config to perform customised tracking
+
+
+overwrite: 1
+restart_checkpoints: 1
+
+data_directory: /scratch/b/b382635/tobac_tracks
+results_directory: /scratch/b/b382635/track_statistics
+checkpoint_directory: /scratch/b/b382635/analysis_checkpoints
+
+region: anatomy_example_large
+version: updraft_ice_only
+
+start_date: '2021-07-01 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+end_date: '2021-07-02 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+
+# which sets of statistics would you like to calculate
+results:
+  first_bucket:
+    name: first_bucket
+    shortname: fb
+    function: FirstBucket
+    parameters: 
+      overall: False # parameters to pass to funciton call
+
+  focus_bucket:
+    name: focus_bucket
+    shortname: fcs1
+    function: FocusBucketAC
+    parameters: False # nothing to pass
+
+batch_size: 48 # number of time steps to process at once
+batch_system: 2
+
