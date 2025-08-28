@@ -136,6 +136,10 @@ def process_all(yaml_file):
         # - only process 1 core valid systems
         df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/EGU2025/system_valid_for_analysis.csv', index_col='system_id')
         valid_systems = df.index[df.iloc[:,0].values]
+    elif di['system_wise_version'] == "grl":
+        # - only process those that avoid donmain boundary and have developing phase of at least 30 mins
+        df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/canvil_paper/remakes_Aug2025/results_data/system_validity.csv', index_col='system_id')
+        valid_systems = df.index[df["valid"]]
     else:
         # - only process those that avoid the domain boundary
         df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")

@@ -13,6 +13,7 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
 # Specify configuration file
+# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
 yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
 
 # CHOOSE OPTIONS
@@ -51,6 +52,11 @@ do
     current_end_date_sec=$(($current_end_date_sec + $hours_sec))
 
     ((count++))
+
+    if [ $count -eq 1 ]; then
+        echo "Stopping for testing purposes."
+        break
+    fi
 
 done
 

@@ -46,7 +46,7 @@ def calculate_xWP(ds, v='cli'):
     xWP = (rho_x * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
     return xWP
 
-def calculate_IWP(ds):
+def calculate_IWP(ds, verbose=0):
     ''' calculate ice water path from frozen hydrometeors: ice, snow and graupel '''
     # densities
     q_frozen = ds['cli'] + ds['qs'] + ds['qg'] # kg kg-1
@@ -55,5 +55,7 @@ def calculate_IWP(ds):
     # iwp
     grid_depth = ds.dzghalf # m
     IWP = (rho_frozen * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
+    if verbose:
+        return IWP, rho_frozen
     return IWP
 

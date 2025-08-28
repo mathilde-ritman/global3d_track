@@ -13,12 +13,13 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 
 # Specify configuration file
-yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
+# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
+yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
 
 # CHOOSE OPTIONS
 start_date=2021-07-01
-end_date=2021-07-08
-hours=4 # number of hours of data per job
+end_date=2021-07-03
+hours=12 # number of hours of data per job
 
 # Convert the dates to seconds since the Unix epoch
 start_date_sec=$(date -d "$start_date" +%s)

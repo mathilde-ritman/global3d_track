@@ -6,8 +6,8 @@
 
 #SBATCH --job-name=analysis
 #SBATCH --partition=shared
-#SBATCH --time=01:00:00
-#SBATCH --mem=100GB
+#SBATCH --time=00:30:00
+#SBATCH --mem=50GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/analysis/job.o%j
 

@@ -73,6 +73,8 @@ def track_object(di, obj_name, start_date, end_date, version):
     if region == 'global':
         PBC_flag = "hdim_2"
     modify_parameters = dict(savedir=fdata_dir, PBC_flag=PBC_flag,)
+    slabs_checkpoint = checkpoint if di['share_labels']['checkpoint'] else None
+    n_k = di['share_labels'].get('n_k', 250)
 
     # - processing
     
@@ -118,7 +120,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10)
+        eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k)
         track_mask['tracks'] = eroded_tracks
 
         checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int64), f'{d}erode-resulting_tracks')
@@ -141,7 +143,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
 
-        connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10)
+        connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k)
         connect_tracks = methods.misc.force_consecutive_labels(connect_tracks)
         track_mask['tracks'] = connect_tracks
 
@@ -222,6 +224,8 @@ def main(yaml_file, start_date, end_date):
     # - link the object tracks into one big tracked system
         
     order = track_di['link']['order'].split('->')
+    slabs_checkpoint = checkpoint if track_di['share_labels']['checkpoint'] else None
+    n_k = track_di['share_labels'].get('n_k', 250)
     if len(order) == 2:
         # collect tracks 
         logging.info(f"{datetime.now()} collecting tracks for order {track_di['link']['order']}...")
@@ -232,7 +236,7 @@ def main(yaml_file, start_date, end_date):
 
         # now get the overall system
         logging.info(f"{datetime.now()} share labels...")
-        result = methods.ShareLabels().share_labels_parallel(get_da(mask_get), get_da(mask_give), nan_val=1e10)
+        result = methods.ShareLabels().share_labels_parallel(get_da(mask_get), get_da(mask_give), nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name='final/', n_k=n_k)
         overall_system = methods.misc.union_all([result, get_da(mask_give)])
 
         # collect results

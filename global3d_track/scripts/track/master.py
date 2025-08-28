@@ -82,6 +82,7 @@ def main(yaml_file, start_date, end_date):
         vars_to_update = [f'{x}_tracks' for k in di['objects'] for x in di['objects'][k]['shortname'] if di['objects'][k]['keep']] + ['system']
         
         methods.link.link_files(remaining_files, vars_to_update, fname_suffix=link_fname_suffix)
+        linked_files = get_files(flink_regex)
         logging.info(f"{datetime.now()} linking complete. Took {datetime.now() - task_start}")
     
     else:

@@ -5,7 +5,6 @@ Mathilde Ritman 2025
 import xarray as xr
 import numpy as np
 import dask
-from typing import Union
 
 # to use to diagnose model relative humidity
 
@@ -57,7 +56,7 @@ def vapour_pressure(ds):
 
     return e
 
-def relative_humidty(ds):
+def relative_humidity(ds):
 
     ### not tested for upper levels 
 

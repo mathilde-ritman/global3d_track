@@ -86,11 +86,35 @@ class Checkpoint:
         data_path = Path(self.record[name])
         logging.info(f"{datetime.now()} loading checkpoint at {data_path}")
         return pd.read_csv(data_path)
-    
+
+    def checkpoint_array(self, arr, name):
+        # save array to checkpoint
+        data_path = self.checkpoint_dir / f"{name}.npy"
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(data_path, arr)
+        # record action
+        self.record[name] = str(data_path)
+        self.save_record()
+        logging.info(f"{datetime.now()} checkpointed {name} to {data_path}")
+
+    def load_array(self, name):
+        data_path = Path(self.record[name])
+        logging.info(f"{datetime.now()} loading checkpoint at {data_path}")
+        return np.load(data_path)
+
     def get_last_checkpoint(self, regex=''):
         regex = re.compile(regex)
         relevant_checkpoints = [k for k in self.record if regex.search(k)]
         if not relevant_checkpoints:
             return None
         else:
-            return max(relevant_checkpoints, key=lambda k: self.record[k][1])
+            return max(relevant_checkpoints, key=lambda k: self.record[k])
+        
+    def remove_old(self, name):
+        data_path = Path(self.record[name])
+        if data_path.exists():
+            os.system(f"rm {data_path}")
+            del self.record[name]
+            logging.info(f"{datetime.now()} removed data at {data_path}")
+        else:
+            logging.warning(f"{datetime.now()} checkpoint {data_path} does not exist, cannot remove.")

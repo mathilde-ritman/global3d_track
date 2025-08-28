@@ -62,7 +62,7 @@ class ShareLabels:
         return unique_A, unique_B
     
     # main    
-    def share_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250):
+    def share_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None):
         '''
         Identifies the labels of features in the current field (L={...}) that overlap with features in the update field (L_update=integer). Then assigns L_update to each l in L. Uses multiprocessing and iteration to do each time step independently, but retains memory of the changes so that results are not impacted by iterating time.
         Parameters:
@@ -78,16 +78,29 @@ class ShareLabels:
                 The batch size to use when applying the label mappings in parallel. A larger batch size will use more memory but may be faster.
         '''
         # initalise
-        current = current.fillna(nan_val).astype(int)
-        update = update.fillna(nan_val).astype(int)
-        new_labels = np.zeros(update.shape, dtype=int)
-        ntimes = len(current.time) if 'time' in current.dims else 1
-        update_tshape = current.isel(time=0).shape if ntimes > 1 else update.shape
+        current = current.fillna(nan_val).astype(int) # xr.dataarray
+        update = update.fillna(nan_val).astype(int) # xr.dataarray
+        new_labels = np.zeros(update.shape, dtype=int) # np.array
+        ntimes = len(current.time) if 'time' in current.dims else 1 # int
+        update_tshape = current.isel(time=0).shape if ntimes > 1 else update.shape # tuple
         durations, all_results, all_index_vals = [], [], [] # store results of each time step
         max_k_in_data, min_k_in_data = {}, {}
-        slices = [slice(None)] * len(current.dims)
+        slices = [slice(None)] * len(current.dims) # list
+
+        # check checkpoints
+        d_maps = f'{checkpoint_name}label_mappings/'
+        flag = 0
+        if checkpoint is not None and checkpoint.checkpoint_reached(f'{d_maps}min_k_in_data'):
+            all_index_vals = checkpoint.load_array(f'{d_maps}all_index_vals').tolist()
+            all_results = checkpoint.load_array(f'{d_maps}all_results').tolist()
+            max_k_in_data_arr = checkpoint.load_array(f'{d_maps}max_k_in_data')
+            min_k_in_data_arr = checkpoint.load_array(f'{d_maps}min_k_in_data')
+            max_k_in_data = {t:max_k_in_data_arr[t] for t in range(len(max_k_in_data_arr))}
+            min_k_in_data = {t:min_k_in_data_arr[t] for t in range(len(min_k_in_data_arr))}
+            flag = 1
 
         def index_data(t, index_vals=None):
+            # index time t
             current_arr = current.isel(time=t).values.reshape(-1) if ntimes > 1 else current.values.reshape(-1)
             update_arr = update.isel(time=t).values.reshape(-1) if ntimes > 1 else update.values.reshape(-1)
             if index_vals is None:
@@ -97,38 +110,62 @@ class ShareLabels:
             return index_vals, di
 
         # iterate times to collect label mappings
-        logging.info(f"{datetime.now()} Finding label maps: {ntimes} iterations")
-        for t in range(ntimes):
-            if t % 10 == 0:
-                logging.info(f"{datetime.now()} ({t}/{ntimes})...")
-            start_time = time.time()
-            index_vals, di = index_data(t, index_vals=None)
-            di = {k: {**di, 
-                      'index':k,
-                      } for k in index_vals}
-            results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], nan_val) for k in index_vals) # process
-            max_k_in_data[t] = np.max(index_vals) # record max k for each time
-            min_k_in_data[t] = np.min(index_vals)
-            all_index_vals.extend(index_vals) # collect mappings
-            all_results.extend(results)
-            durations.append(time.time() - start_time)
-        logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
+        if not flag:
+            logging.info(f"{datetime.now()} Finding label maps: {ntimes} iterations")
+            for t in range(ntimes):
+                if t % 10 == 0:
+                    logging.info(f"{datetime.now()} ({t}/{ntimes})...")
+                start_time = time.time()
+                index_vals, di = index_data(t, index_vals=None)
+                di = {k: {**di, 
+                        'index':k,
+                        } for k in index_vals}
+                results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], nan_val) for k in index_vals) # process
+                max_k_in_data[t] = np.max(index_vals) # record max k for each time
+                min_k_in_data[t] = np.min(index_vals)
+                all_index_vals.extend(index_vals) # collect mappings
+                all_results.extend(results)
+                durations.append(time.time() - start_time)
+            logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
 
-        # clean mappings
-        n_values = len(all_results)
-        all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
-        logging.info(f"{datetime.now()} {n_values} label maps reduced to {len(all_results)}")
+            # clean mappings
+            n_values = len(all_results)
+            all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
+            logging.info(f"{datetime.now()} {n_values} label maps reduced to {len(all_results)}")
+
+            # save mappings
+            if checkpoint is not None:
+                checkpoint.checkpoint_array(np.array(all_index_vals), f'{d_maps}all_index_vals')
+                checkpoint.checkpoint_array(np.array(all_results), f'{d_maps}all_results')
+                checkpoint.checkpoint_array(np.array([max_k_in_data[t] for t in range(ntimes)]), f'{d_maps}max_k_in_data')
+                checkpoint.checkpoint_array(np.array([min_k_in_data[t] for t in range(ntimes)]), f'{d_maps}min_k_in_data')
 
         # iterate times again to apply all mappings
         durations = []
         logging.info(f"{datetime.now()} Applying all label maps: {ntimes} iterations")
         logging.info(f"{datetime.now()} {len(all_index_vals)} values, batch size = {n_k}")
+
+        # check checkpoints
+        t_latest = None
+        if checkpoint is not None:
+            d = f'{checkpoint_name}share_labels/'
+            # find latest checkpoint
+            latest_checkpoint = checkpoint.get_last_checkpoint(d)
+            logging.info(f"{datetime.now()} Latest checkpoint: {latest_checkpoint}")
+            if checkpoint.checkpoint_reached(latest_checkpoint):
+                new_labels = checkpoint.load_array(latest_checkpoint)
+                t_latest = int(latest_checkpoint.split('/')[-1].split('.')[0])
+                logging.info(f"{datetime.now()} Starting from ({t_latest+1}/{ntimes}).")
+
+        # apply remaining mappings
         for t in range(ntimes):
+            if t_latest is not None and t <= t_latest:
+                continue
             if t % 10 == 0:
                 logging.info(f"{datetime.now()} ({t}/{ntimes})...")
             start_time = time.time()
             slices[0] = t if ntimes > 1 else slice(None)
-            all_index_vals, di = index_data(t, index_vals=all_index_vals)
+            _, di = index_data(t, index_vals=all_index_vals)
             di = {k: {**di, 
                       'index':k,
                       'result':all_results[i],
@@ -147,6 +184,12 @@ class ShareLabels:
                 results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.update_labels)(di[k]) for k in batch_index_vals)
                 for label_map in results:
                     new_labels[tuple(slices)] += label_map.reshape(update_tshape) # apply all mappings
+            # if checkpoints are needed, save checkpoint
+            if checkpoint is not None and (t % 10 == 0):
+                checkpoint.checkpoint_array(new_labels, f'{d}{t}')
+                if t > 10:
+                    checkpoint.remove_old(f'{d}{t-10}') # remove old checkpoints
+                
             durations.append(time.time() - start_time)
         logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
 

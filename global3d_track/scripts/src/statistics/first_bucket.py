@@ -7,7 +7,7 @@ import numpy as np
 import dask
 from datetime import datetime
 import logging
-from .cmf import CMF
+from .calculations import CMF
 
 # general cloud object statistics
 

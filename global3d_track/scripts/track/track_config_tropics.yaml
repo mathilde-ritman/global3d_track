@@ -36,6 +36,10 @@ objects:
     require_overlap: updraft # only keep tracks that overlap with an updraft track at some point in time
     keep: False
 
+share_labels:
+  checkpoint: True # whether to checkpoint progress for share labels
+  n_k: 200 # batch size for label mapping
+
 link:
   order: ice->updraft
   name: updraft_ice_only
@@ -50,5 +54,5 @@ batch_size:
   detect_segment: 4 # [ALSO NEEDS SETTING IN .SH] number of hours to batch process for detection and segmentation
   track: 24 # [ALSO NEEDS SETTING IN .SH] number of hours to batch process for tracking
   define: 1 # number of time steps to batch process for anvil base height calculations
-  filter: 1 # number of time steps to batch process for track filtering
+  filter: 1 # number of time steps to batch process for final track filtering
 

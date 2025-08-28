@@ -5,7 +5,6 @@ Mathilde Ritman 2025
 import xarray as xr
 import numpy as np
 import dask
-from dask import delayed, compute
 import logging
 from datetime import datetime
 import metpy

@@ -6,11 +6,11 @@
 
 #SBATCH --job-name=proc
 #SBATCH --partition=compute
-#SBATCH --time=08:00:00
-#SBATCH --mem=250GB
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=128
-#SBATCH --cpus-per-task=2
+#SBATCH --time=01:00:00
+#SBATCH --mem=150GB
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=8
+#SBATCH --cpus-per-task=1
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/proc/job.o%j
 
@@ -22,9 +22,9 @@ module load python3
 source /home/b/b382635/.bashrc
 source activate hackathon_env
 
-yaml=/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config.yaml
+yaml=/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml
 start_date=2021-07-01-00:00:00
-end_date=2021-07-08-00:00:00
+end_date=2021-07-02-00:00:00
 
 echo "submitted with arguments: " $yaml $start_date $end_date
 

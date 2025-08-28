@@ -8,13 +8,9 @@ import dask
 from dask import delayed, compute
 import logging
 from datetime import datetime
-from .cmf import CMF
-from .water_path import calculate_xWP
-from .density import density
-from . import relative_humidty
+# from .cmf import CMF
+from .calculations import relative_humidity, density, CMF
 
-import time
-import tracemalloc
 
 '''
 more cloud object statistics: this time with a focus on key results wanter to assess the properties of the anvils, and the properties of the cores.
@@ -23,32 +19,6 @@ more cloud object statistics: this time with a focus on key results wanter to as
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Decorator for timing
-def timed(func):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        result = func(*args, **kwargs)
-        elapsed = time.time() - start
-        logging.info(f"[{func.__name__}] Elapsed time: {elapsed:.2f} seconds")
-        return result
-    return wrapper
-
-# Decorator for memory usage using tracemalloc
-def memory_tracked(func):
-    def wrapper(*args, **kwargs):
-        tracemalloc.start()
-        snapshot1 = tracemalloc.take_snapshot()
-        result = func(*args, **kwargs)
-        snapshot2 = tracemalloc.take_snapshot()
-        stats = snapshot2.compare_to(snapshot1, 'lineno')
-        logging.info(f"[{func.__name__}] Memory usage (top 10 lines):")
-        for stat in stats[:10]:
-            logging.info(stat)
-        tracemalloc.stop()
-        return result
-    return wrapper
-
 
 class FocusBucketAC(CMF):
 
@@ -61,14 +31,13 @@ class FocusBucketAC(CMF):
         self.time_spacings = 900 # s
         self.NAN = -999.99
 
-    # @timed
-    # @memory_tracked
+
     def get_iwp(self, mask, data, name, ):
         '''  Ice water path calculation '''
     
         masked_data = data[['pfull','ta','hus','cli','clw','qg','qr','qs','dzghalf']].sel(time=mask.time).where(mask>0)
 
-        IWP = calculate_xWP(masked_data, v='cli')
+        IWP = density.calculate_xWP(masked_data, 'cli')
         IWP.attrs = dict(units='kg m-2', long_name=f'{name} ice water path')
 
         ds = xr.Dataset({f'{name}_iwp': IWP})
@@ -76,8 +45,7 @@ class FocusBucketAC(CMF):
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
     
-    # @timed
-    # @memory_tracked
+
     def get_geometric(self, mask, data, name, ):
 
         masked_data = data[['dzghalf']].where(mask>0).sel(time=mask.time)
@@ -97,8 +65,7 @@ class FocusBucketAC(CMF):
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
 
-    # @timed
-    # @memory_tracked
+
     def efficient_convection_results(self, mask, data, name):
         ''' Combo function to get results from both 'conevction_extremes' and 'get_density_cmf' functions without double-up on computations. '''
 
@@ -228,8 +195,7 @@ class FocusBucketAC(CMF):
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
     
-    # @timed
-    # @memory_tracked
+
     def get_preconditions(self, mask, data, name):
         ''' Get mean surface temperature and low level relative humidity in the footprint of the mask. '''
 
@@ -242,7 +208,7 @@ class FocusBucketAC(CMF):
 
         # humidty
         low_levels = masked_data.sel(level_full=slice(80,90)) # take low level atmosphere only
-        rh = relative_humidty.relative_humidty(low_levels).mean(('level_full','lat','lon')) # take low level atmosphere only
+        rh = relative_humidity.relative_humidity(low_levels).mean(('level_full','lat','lon')) # take low level atmosphere only
 
         # attrs
         ts.attrs = dict(units='K', long_name=f'{name} surface temperature')
@@ -254,8 +220,7 @@ class FocusBucketAC(CMF):
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
     
-    # @timed
-    # @memory_tracked
+
     def winds_at_mask(self, mask, data, name):
         ''' mean u and v winds at the within the anvil area and at height.'''
 
@@ -320,8 +285,7 @@ class FocusBucketAC(CMF):
 
         return anvil_stats.fillna(self.NAN)
 
-    # @timed
-    # @memory_tracked
+
     def get_everything(self, mask, data, ):
             
         core_mask = mask.u_tracks

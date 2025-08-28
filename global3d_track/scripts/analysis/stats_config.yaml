@@ -17,16 +17,10 @@ end_date: '2021-07-08 00:00:00' # [ALSO NEEDS SETTING IN .SH]
 
 # which sets of statistics would you like to calculate
 results:
-  first_bucket:
-    name: first_bucket
-    shortname: fb
-    function: FirstBucket
-    parameters: 
-      overall: False # parameters to pass to funciton call
-  focus_bucket:
-    name: focus_bucket
-    shortname: fcs1
-    function: FocusBucketAC
+  grl_bucket:
+    name: grl_bucket
+    shortname: grl
+    function: GRLBucket
     parameters: False # nothing to pass
   # cross_section:
   #   name: cross_section
@@ -40,6 +34,6 @@ batch_size: 4 # number of time steps to process at once
 
 # for system-wise analysis
 batch_system: 4 # number of systems to process at once
-system_wise_version: 'fcsfirst' # name
+system_wise_version: 'grl' # sets results directory and how to filter valid systems
 max_system_size: 300000 # (pixels) maximum size of a system to process
 start_idx: 0 # (cloud number) where to start from

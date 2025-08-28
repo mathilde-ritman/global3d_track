@@ -6,19 +6,24 @@
 
 #SBATCH --job-name=track_itr
 #SBATCH --partition=compute
-#SBATCH --time=02:00:00
-#SBATCH --mem=250GB
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=128
-#SBATCH --cpus-per-task=2
+#SBATCH --time=08:00:00
+#SBATCH --mem=500GB
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=64
+#SBATCH --cpus-per-task=1
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
- 
+# Amazon:
 # takes 1hr - 1hr40min to run 1 day over the Amazon. No issues at 250 GB.
 # takes 1hr - 1hr15min to run 1 day over the Amazon with 2 nodes and 128 tasks per node and 2 cpus per task. No issues at 250 GB.
 
-module load python3 
+# Tropics:
+# took 30 mins to get to share_labels for updrafts, then couldn't finish sharing, on 1 day over the tropics with 500 GB, 4 nodes, 34 tasks per node and 1 cpu per task.
+# running with checkpoints for 8 hrs, with 500 GB, 1 node, 64 tasks per node and 1 cpu per task.
+# took ~4hrs to perform erode-connect ice tracking (settings above).
+
+module load python3
 source /home/b/b382635/.bashrc
 source activate hackathon_env
 

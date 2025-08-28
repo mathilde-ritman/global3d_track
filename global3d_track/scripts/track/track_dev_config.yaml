@@ -1,11 +1,11 @@
 # config to perform customised tracking
 
 
-overwrite: 1
-restart_checkpoints: 1
+overwrite: 0
+restart_checkpoints: 0
 
-data_directory: /scratch/b/b382635/tobac_tracks
-feature_data_directory: /scratch/b/b382635/tobac_tracks
+data_directory: /work/bb1153/b382635/data/final_tracks
+feature_data_directory: /work/bb1153/b382635/data/final_tracks
 checkpoint_directory: /scratch/b/b382635/tracking_checkpoints
 
 region: anatomy_example_large
@@ -35,6 +35,9 @@ objects:
       connect: True
     require_overlap: updraft # only keep tracks that overlap with an updraft track at some point in time
     keep: False
+    
+share_labels:
+  checkpoint: True # whether to checkpoint progress for share labels
 
 link:
   order: ice->updraft
