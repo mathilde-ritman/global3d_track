@@ -130,7 +130,7 @@ class Track(Connect, Helpers):
             mask_dataset['feature'].attrs['description'] = 'tobac features after segmentation'
             
             if self.save:
-                mask_dataset.where(mask_dataset > 0, NAN).astype(np.int64).to_netcdf(Path(self.savedir_v, 'segmented_mask.nc'))
+                mask_dataset.where(mask_dataset > 0, NAN).astype(np.int32).to_netcdf(Path(self.savedir_v, 'segmented_mask.nc'))
                 # segmented_features.to_hdf(Path(self.savedir_v, 'segmented_features.h5'), 'table')
                 logging.info('feature segmentation results saved to ' + self.savedir_v)
             
@@ -149,7 +149,7 @@ class Track(Connect, Helpers):
             mask_dataset = mask_dataset.where(mask_dataset > 0)
 
             if self.save:
-                mask_dataset.astype(np.int64).to_netcdf(Path(self.savedir_v, 'tracked_mask.nc'))
+                mask_dataset.astype(np.int32).to_netcdf(Path(self.savedir_v, 'tracked_mask.nc'))
                 tracks.to_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
                 logging.info('tracking results saved to ' + str(Path(self.savedir_v, 'tracks.h5')))
         
@@ -160,7 +160,7 @@ class Track(Connect, Helpers):
         elif merge:
             merges = tobac.merge_split.merge_split_MEST(tracks, dxy=dxy)
             # -- add to mask dataset
-            tracks["merged"] = (merges.feature_parent_track_id.data+1).astype(np.int64)
+            tracks["merged"] = (merges.feature_parent_track_id.data+1).astype(np.int32)
             mask_dataset['merged'] = self._table_to_dataset(table=tracks, col='merged', dataset=mask_dataset)
             mask_dataset['merged'] = mask_dataset.merged
             mask_dataset['merged'].attrs['description'] = 'tobac features after track merging and splitting'

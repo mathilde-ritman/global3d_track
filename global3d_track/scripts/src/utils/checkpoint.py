@@ -66,7 +66,16 @@ class Checkpoint:
         # save dataset to checkpoint
         data_path = self.checkpoint_dir / f"{name}.nc"
         data_path.parent.mkdir(parents=True, exist_ok=True)
-        ds.to_netcdf(data_path)
+        # compress
+        if isinstance(ds, xr.DataArray):
+            logging.info(f"{datetime.now()} warning: saving a DataArray, not a Dataset; {ds.name=}")
+            if ds.name is None:
+                ds = ds.rename("data")
+            encoding = {ds.name: {"zlib": True, "complevel": 4}}
+        else:
+            logging.info(f"{datetime.now()} saving a Dataset; {list(ds.data_vars)=}")
+            encoding = {var: {"zlib": True, "complevel": 4} for var in ds.data_vars}
+        ds.to_netcdf(data_path, encoding=encoding, engine="h5netcdf")
         # record action
         self.record[name] = str(data_path)
         self.save_record()

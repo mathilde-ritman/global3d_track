@@ -6,7 +6,7 @@
 
 #SBATCH --job-name=notebook
 #SBATCH --partition=compute
-#SBATCH --time=03:00:00
+#SBATCH --time=06:00:00
 #SBATCH --mem=100GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/notebook/job.o%j
@@ -16,7 +16,7 @@ module load python3
 source /home/b/b382635/.bashrc
 source activate hackathon_env
 
-nb_path=/home/b/b382635/s/my_notebooks/dataset_paper/12.results-reslationships
+nb_path=/home/b/b382635/s/my_notebooks/conv_anvil_paper/12.data_results
 # nb_path="/home/b/b382635/s/my_notebooks/EGU2025/2.3.results_big"
 # nb_path=/home/b/b382635/s/my_notebooks/dataset_paper/02.evaluation_using_stats
 # nb_path="/home/b/b382635/s/my_notebooks/conv_anvil_paper/01.cmfi"
@@ -27,8 +27,8 @@ nb_path=/home/b/b382635/s/my_notebooks/dataset_paper/12.results-reslationships
 # python $nb_path.py
 
 jupyter nbconvert $nb_path.ipynb --to python
-batch=1
-size=50
+batch=2
+size=100
 
 while (( batch * size <= 1000 ))
 do

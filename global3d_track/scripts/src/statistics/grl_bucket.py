@@ -29,10 +29,10 @@ class GRLBucket(CMF):
         self.time_spacings = 900 # s
         self.NAN = -999.99
 
-    def get_geometric(self, mask, data, name, dims=('level_full','lat','lon')):
+    def get_geometric(self, mask, masked_data, name, dims=('level_full','lat','lon')):
         ''' Geometric calculation '''
 
-        masked_data = data[['zg','dzghalf','ta','rlut','ta']].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[['zg','dzghalf','ta','rlut','ta']]
 
         # area (time)
         area = (mask>0).sum(('lat','lon')) * self.grid_spacings**2
@@ -64,13 +64,14 @@ class GRLBucket(CMF):
                          f'{name}_olr':OLR,
                 })
         
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
 
-    def get_iwp(self, mask, data, name, ):
+    def get_iwp(self, masked_data, name, ):
         '''  Frozen & Ice water path, and related calculation '''
     
-        masked_data = data[['pfull','ta','hus','cli','clw','qg','qr','qs','dzghalf']].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[['pfull','ta','hus','cli','clw','qg','qr','qs','dzghalf']]
 
         # frozen/ice water path
         FWP, rho_F = calculations.calculate_IWP(masked_data, verbose=1)
@@ -89,55 +90,63 @@ class GRLBucket(CMF):
                          f'{name}_rho_ice': rho_I,
                          })
 
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
     
-    def get_divergence(self, mask, data, name):
-        ''' Divergence calculation '''
+    def get_divergence(self, masked_data, name):
+        ''' Horizontal wind divergence calculation '''
 
-        masked_data = data[['ua','va']].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[['ua','va']]
 
-        # horizontal wind divergence
-        div = metpy.calc.divergence(masked_data.ua, masked_data.va).mean(('lat','lon')) # s-1
-        div = div.metpy.dequantify() # remove units for safe write to disk
+        # skip anvils without enough data points
+        is_valid = (masked_data.lat.size > 2) & (masked_data.lon.size > 2)
+        if not is_valid:
+            div = xr.full_like(masked_data.ua.any(('lat','lon')), np.nan, dtype=float)
+        else:
+            div = metpy.calc.divergence(masked_data.ua, masked_data.va).mean(('lat','lon')) # s-1
+            div = div.metpy.dequantify() # remove units for safe write to disk
         div.attrs = dict(units='s-1', long_name=f'{name} horizontal wind divergence')
 
         ds = xr.Dataset({f'{name}_div': div,
                         })
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
     
-    def get_temperature(self, mask, data, name):
+    def get_temperature(self, masked_data, name):
         ''' Temperature with height calculation '''
 
-        masked_data = data[['ta']].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[['ta']]
 
         # temperature
         mean_t = masked_data.ta.mean(('lat','lon'))
         mean_t.attrs = dict(units='K', long_name=f'{name} mean temperature')
         ds = xr.Dataset({f'{name}_T': mean_t,
                         })
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
     
-    def get_precipitation(self, mask, data, name):
+    def get_precipitation(self, masked_data, name):
         ''' Surface precipitation calculation '''
 
-        masked_data = data[['pr']].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[['pr']]
 
         # precipitation
         total_pr = masked_data.pr.sum(('lat','lon')) * (self.grid_spacings**2) # kg s-1
         total_pr.attrs = dict(units='kg s-1', long_name=f'{name} total precipitation flux')
         ds = xr.Dataset({f'{name}_pr': total_pr,
                         })
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
     
-    def get_density_cmf(self, mask, data, name):
+    def get_density_cmf(self, mask, masked_data, name):
         ''' Density, convective mass flux, and related calculation '''
 
         req_vars = ['ts','pfull','ta','hus','cli','clw','qg','qr','qs','dzghalf','wa_phy']
-        masked_data = data[req_vars].sel(time=mask.time).where(mask>0)
+        masked_data = masked_data[req_vars]
 
         # density
         rho = calculations.density(masked_data) # kg m-3
@@ -175,13 +184,15 @@ class GRLBucket(CMF):
                         f'{name}_RH': rh,
                         })
 
-        dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
-        return ds.transpose(*dims)
+        # dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
+        # return ds.transpose(*dims)
+        return ds
     
     
     def _process_single_core(self, core_mask, c, data, name):
-        c_mask = core_mask.where(core_mask == c) # mask current core
-        core_stats = self.get_density_cmf(c_mask, data, name)
+        c_mask = (core_mask == c) # mask current core
+        masked_data = data.sel(time=core_mask.time).where(c_mask>0,  )
+        core_stats = self.get_density_cmf(c_mask, masked_data, name)
         return core_stats
 
     def core(self, core_mask, data, name):
@@ -205,19 +216,25 @@ class GRLBucket(CMF):
         if not (anvil_mask.max() > 0):
             # there are no results in the mask provided
             return xr.Dataset(coords=anvil_mask.coords).fillna(self.NAN)
-        anvil_stats = self.get_geometric(anvil_mask, data, name, dims=('level_full'))
-        anvil_stats.update(self.get_iwp(anvil_mask, data, name))
-        anvil_stats.update(self.get_divergence(anvil_mask, data, name))
+        masked_data = data.sel(time=anvil_mask.time).where(anvil_mask>0)
+        results = {}
+        results.update(self.get_geometric(anvil_mask, masked_data, name, dims=('level_full')).data_vars)
+        results.update(self.get_iwp(masked_data, name).data_vars)
+        results.update(self.get_divergence(masked_data, name).data_vars)
+        anvil_stats = xr.Dataset(results, coords=anvil_mask.coords)
         return anvil_stats.fillna(self.NAN)
     
     def cloud(self, cloud_mask, data, name='cloud'):
         if not (cloud_mask.max() > 0):
             # there are no results in the mask provided
             return xr.Dataset(coords=cloud_mask.coords).fillna(self.NAN)
-        cloud_stats = self.get_geometric(cloud_mask, data, name)
-        cloud_stats.update(self.get_iwp(cloud_mask, data, name))
-        cloud_stats.update(self.get_temperature(cloud_mask, data, name))
-        cloud_stats.update(self.get_precipitation(cloud_mask, data, name))
+        masked_data = data.sel(time=cloud_mask.time).where(cloud_mask>0,  )
+        results = {}
+        results.update(self.get_geometric(cloud_mask, masked_data, name).data_vars)
+        results.update(self.get_iwp(masked_data, name).data_vars)
+        results.update(self.get_temperature(masked_data, name).data_vars)
+        results.update(self.get_precipitation(masked_data, name).data_vars)
+        cloud_stats = xr.Dataset(results, coords=cloud_mask.coords)
         return cloud_stats.fillna(self.NAN)
 
     def get_everything(self, mask, data, ):
@@ -231,4 +248,6 @@ class GRLBucket(CMF):
         stats = stats.merge(self.core(core_mask, data, 'core'))
         stats = stats.merge(self.cloud(cloud_mask, data, 'cloud'))
 
-        return stats.fillna(self.NAN)
+        dims = (x for x in ('system','core','time','level_full','lat','lon') if x in stats.dims)
+        return stats.transpose(*dims).fillna(self.NAN)
+    

@@ -34,6 +34,6 @@ batch_size: 4 # number of time steps to process at once
 
 # for system-wise analysis
 batch_system: 4 # number of systems to process at once
-system_wise_version: 'grl' # sets results directory and how to filter valid systems
-max_system_size: 300000 # (pixels) maximum size of a system to process
-start_idx: 0 # (cloud number) where to start from
+system_wise_version: 'grl_no_development' # sets results directory and how to filter valid systems
+max_system_size: 10000 # (pixels) maximum size of a system to process
+start_idx: 0 # (cloud number, out of remaining) where to start from

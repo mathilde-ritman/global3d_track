@@ -7,7 +7,7 @@
 #SBATCH --job-name=detect_itr
 #SBATCH --partition=shared
 #SBATCH --time=00:20:00
-#SBATCH --mem=50GB
+#SBATCH --mem=100GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 

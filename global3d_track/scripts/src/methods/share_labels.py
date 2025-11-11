@@ -185,10 +185,12 @@ class ShareLabels:
                 for label_map in results:
                     new_labels[tuple(slices)] += label_map.reshape(update_tshape) # apply all mappings
             # if checkpoints are needed, save checkpoint
-            if checkpoint is not None and (t % 10 == 0):
+            if checkpoint is not None and ((t % 10 == 0) or t == np.max(range(ntimes))):
                 checkpoint.checkpoint_array(new_labels, f'{d}{t}')
-                if t > 10:
+                if t > 10 and (t % 10 == 0):
                     checkpoint.remove_old(f'{d}{t-10}') # remove old checkpoints
+                elif t == np.max(range(ntimes)):
+                    checkpoint.remove_old(f'{d}{t - (t%10)}')
                 
             durations.append(time.time() - start_time)
         logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")

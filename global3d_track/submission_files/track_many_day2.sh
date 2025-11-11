@@ -13,12 +13,12 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
 # Specify configuration file
-yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
-# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
+# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
+yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
 
 # CHOOSE OPTIONS
-start_date=2021-07-01
-end_date=2021-07-02
+start_date=2021-07-02
+end_date=2021-07-03
 hours=24 # number of hours of data per job
 
 # Convert the dates to seconds since the Unix epoch
@@ -45,7 +45,7 @@ do
 
     # Submit job
     echo submitted for start $datetime
-    sbatch /home/b/b382635/s/global3d_track/global3d_track/submission_files/track_itr.sh $yaml_file $current_start_dt $current_end_dt
+    sbatch /home/b/b382635/s/global3d_track/global3d_track/submission_files/track_itr_day2.sh $yaml_file $current_start_dt $current_end_dt
 
     # Next iteration
     current_date_sec=$current_end_date_sec

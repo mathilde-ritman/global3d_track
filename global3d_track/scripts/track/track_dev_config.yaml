@@ -1,8 +1,8 @@
 # config to perform customised tracking
 
 
-overwrite: 0
-restart_checkpoints: 0
+overwrite: 1
+restart_checkpoints: 1
 
 data_directory: /work/bb1153/b382635/data/final_tracks
 feature_data_directory: /work/bb1153/b382635/data/final_tracks

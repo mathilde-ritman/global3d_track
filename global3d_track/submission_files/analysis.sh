@@ -5,11 +5,11 @@
 # University of Oxford
 
 #SBATCH --job-name=analysis
-#SBATCH --partition=compute
+#SBATCH --partition=shared
 #SBATCH --time=08:00:00
-#SBATCH --mem=100GB
+#SBATCH --mem=150GB
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=32
+#SBATCH --ntasks-per-node=36
 #SBATCH --cpus-per-task=1
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/analysis/job.o%j

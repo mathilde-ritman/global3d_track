@@ -6,10 +6,10 @@
 
 #SBATCH --job-name=track_itr
 #SBATCH --partition=compute
-#SBATCH --time=00:30:00
-#SBATCH --mem=50GB
+#SBATCH --time=08:00:00
+#SBATCH --mem=500GB
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=24
 #SBATCH --cpus-per-task=1
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j

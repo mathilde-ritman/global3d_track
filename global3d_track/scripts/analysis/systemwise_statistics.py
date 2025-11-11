@@ -118,7 +118,7 @@ def process_system(di, data_dir, save_dir, sidx, NAN=-999.99):
     gc.collect()
     log_memory(f"{sidx}: after saving statistics")
     took = time.time() - itr_start
-    logging.info(f"{datetime.now()} Done for system {sidx}, took {took} seconds. Saved to {fpath}.nc")
+    logging.info(f"{datetime.now()} Done for system {sidx}, took {took} seconds. Saved to {fpath}")
 
 
 def process_all(yaml_file):
@@ -136,6 +136,13 @@ def process_all(yaml_file):
         # - only process 1 core valid systems
         df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/EGU2025/system_valid_for_analysis.csv', index_col='system_id')
         valid_systems = df.index[df.iloc[:,0].values]
+    elif di['system_wise_version'] == "grl_no_development":
+        # add those that avoid the domain boundary and don't have a developing phase of at least 30 mins
+        df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")
+        valid_systems = df.index[~df["hits_boundary"]] 
+        df_restricted = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/canvil_paper/remakes_Aug2025/results_data/system_validity.csv', index_col='system_id')
+        # get systems in all bot not in restricted
+        valid_systems = [x for x in valid_systems if x not in df_restricted.index[df_restricted["valid"]]]
     elif di['system_wise_version'] == "grl":
         # - only process those that avoid donmain boundary and have developing phase of at least 30 mins
         df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/canvil_paper/remakes_Aug2025/results_data/system_validity.csv', index_col='system_id')
@@ -144,7 +151,8 @@ def process_all(yaml_file):
         # - only process those that avoid the domain boundary
         df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")
         valid_systems = df.index[~df["hits_boundary"]] 
-    valid_systems = valid_systems.tolist()
+    if not isinstance(valid_systems, list):
+        valid_systems = valid_systems.tolist()
     logging.info(f"{datetime.now()} found {len(valid_systems)} valid systems to process.")
 
     # - directory to use
@@ -154,27 +162,28 @@ def process_all(yaml_file):
     logging.info(f"{datetime.now()} using {result_dir} for results")
 
     # - already processed?!
+    remaining_systems = valid_systems.copy()
     count = 0
     for sidx in valid_systems:
         result_path = result_dir / f"cloud_{sidx}.nc"
         if result_path.exists() and not overwrite:
             logging.info(f"{datetime.now()} skipping system {sidx} as already processed")
-            valid_systems.remove(sidx)
+            remaining_systems.remove(sidx)
             count += 1
-    logging.info(f"{datetime.now()} {count} systems already processed, {len(valid_systems)} remaining")
+    logging.info(f"{datetime.now()} {count} systems already processed, {len(remaining_systems)} remaining")
 
     # - process in batches
     batch_size = di.get('batch_system', 1)
-    n_batches = len(valid_systems) // batch_size + 1
+    n_batches = len(remaining_systems) // batch_size + 1
     i0 = di.get('start_idx', 0)
-    if i0 >= len(valid_systems):
-        logging.warning(f"{datetime.now()} starting index {i0} is greater than number of systems {len(valid_systems)}, setting to 0")
+    if i0 >= len(remaining_systems):
+        logging.warning(f"{datetime.now()} starting index {i0} is greater than number of systems {len(remaining_systems)}, setting to 0")
         i0 = 0
-    logging.info(f"{datetime.now()} processing {len(valid_systems)} systems in {n_batches} batches of {batch_size} systems each")
+    logging.info(f"{datetime.now()} processing {len(remaining_systems)} systems in {n_batches} batches of {batch_size} systems each")
     durations = []
-    for i in range(i0, len(valid_systems), batch_size):
+    for i in range(i0, len(remaining_systems), batch_size):
         itr_start = time.time()
-        systems_in_batch = valid_systems[i:i + batch_size]
+        systems_in_batch = remaining_systems[i:i + batch_size]
 
         # - mulitiprocess batch
         logging.info(f"{datetime.now()} multiprocessing {batch_size} systems in batch {i // batch_size + 1} / {n_batches}...")
