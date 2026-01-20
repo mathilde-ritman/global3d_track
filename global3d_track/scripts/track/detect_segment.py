@@ -9,7 +9,7 @@ import pickle
 import logging
 import warnings
 import argparse
-
+import functools
 import xarray as xr
 import os
 import numpy as np
@@ -47,7 +47,20 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     # - load data
 
     sel, seg = tobac_config['select_data'], tobac_config['segment_data']
-    data = utils.data_tools.load_tobac_data((sel, seg), di['region'], start_date, end_date)
+    # ++ check if multivariate inpupt
+    if not isinstance(sel, list):
+        sel = [sel,]
+    if not isinstance(seg, list):
+        seg = [seg,]
+    logging.info(f"{datetime.now()} loading data for detection and segmentation: {sel} and {seg} -> {sel+seg}")
+    data = utils.data_tools.load_tobac_data(sel+seg, di['region'], start_date, end_date)
+    # ++ add input variables if multiple (e.g., cli+clw)
+    if isinstance(sel, list):
+        data['+'.join(sel)] = functools.reduce(np.add, [data[var] for var in sel])
+        sel = '+'.join(sel)
+    if isinstance(seg, list):
+        data['+'.join(seg)] = functools.reduce(np.add, [data[var] for var in seg])
+        seg = '+'.join(seg)
 
     # - processing
 

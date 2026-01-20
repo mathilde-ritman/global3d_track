@@ -11,7 +11,9 @@ import logging
 from datetime import datetime
 import joblib
 import time
-
+import pandas as pd
+import pathlib
+from .tobac_wrapper import Helpers
 
 class ShareLabels:
 
@@ -60,9 +62,51 @@ class ShareLabels:
         unique_A = list(min_values.keys())
         unique_B = list(min_values.values())
         return unique_A, unique_B
+
+    def share_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None, record={}):
+        ''' Update to V0 that records the mappings applies in a dataframe, and more efficiently updates the output mask.
+        'record' requires:
+            - 'path': str path to the .h5 file where the tracking dataframe is stored for the input array current
+            - 'current_col': str name of the column in the dataframe corresponding to the current array labels
+            - 'update_col': str name of the column in the dataframe corresponding to the array labels resulting from this function call
+        '''
+
+        # find or load mappings
+        d_maps = f'{checkpoint_name}label_mappings/'
+        if checkpoint is not None and checkpoint.checkpoint_reached(f'{d_maps}min_k_in_data'):
+            index = checkpoint.load_array(f'{d_maps}all_index_vals').tolist()
+            new = checkpoint.load_array(f'{d_maps}all_results').tolist()
+        else:
+            index, new = self.find_labels_parallel(current, update, nan_val, n_jobs)
+            if checkpoint is not None:
+                checkpoint.checkpoint_array(np.array(index), f'{d_maps}index_vals')
+                checkpoint.checkpoint_array(np.array(new), f'{d_maps}new_vals')
+
+        # record mappings in dataframe
+        logging.info(f"{datetime.now()} Applying label mappings to dataframe...")
+        path = pathlib.Path(record['path'])
+        mapping = dict(zip(index, new))
+        if path.exists():
+            df = pd.read_hdf(path, 'table')
+        else:
+            df = pd.DataFrame()
+            df[record['current_col']] = np.unique(current.values)
+        df[record['update_col']] = df[record['current_col']].map(mapping).fillna(0)
+        outpath = path.with_name(f"{path.stem}_{record['update_col']}{path.suffix}")
+        df.to_hdf(outpath, 'table')
+        logging.info(f"{datetime.now()} saved table to {outpath}.")
+
+        # apply to the mask dataset
+        logging.info(f"{datetime.now()} Applying label mappings to dataset...")
+        dataset = current.to_dataset(name=record['current_col'])
+        result = Helpers()._table_to_dataset(df, record['update_col'], dataset, record['current_col'])
+        logging.info(f"{datetime.now()} done.")
+
+        return result.where(result>0)
+    
     
     # main    
-    def share_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None):
+    def share_labels_parallel_v0(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None):
         '''
         Identifies the labels of features in the current field (L={...}) that overlap with features in the update field (L_update=integer). Then assigns L_update to each l in L. Uses multiprocessing and iteration to do each time step independently, but retains memory of the changes so that results are not impacted by iterating time.
         Parameters:
@@ -117,6 +161,11 @@ class ShareLabels:
                     logging.info(f"{datetime.now()} ({t}/{ntimes})...")
                 start_time = time.time()
                 index_vals, di = index_data(t, index_vals=None)
+                # logging.info(f"{datetime.now()} dataset time {t} has {len(index_vals)} unique values")
+                if len(index_vals) == 0:
+                    max_k_in_data[t] = 0
+                    min_k_in_data[t] = 0
+                    continue
                 di = {k: {**di, 
                         'index':k,
                         } for k in index_vals}
@@ -203,7 +252,7 @@ class ShareLabels:
         current = current.fillna(nan_val).astype(int)
         update = update.fillna(nan_val).astype(int)
         ntimes = len(current.time) if 'time' in current.dims else 1
-        slices = [slice(None)] * len(current.dims)
+        # slices = [slice(None)] * len(current.dims)
 
         def index_data(t, index_vals=None):
             current_arr = current.isel(time=t).values.reshape(-1) if ntimes > 1 else current.values.reshape(-1)
@@ -216,9 +265,12 @@ class ShareLabels:
 
         # find mappings
         logging.info(f"{datetime.now()} Finding label maps: {ntimes} iterations")
-        all_results, all_index_vals = [], [] # store results of each time step
+        durations, all_results, all_index_vals = [], [], [] # store results of each time step
         for t in range(ntimes):
-            slices[0] = t if ntimes > 1 else slice(None)
+            if t % 10 == 0:
+                logging.info(f"{datetime.now()} ({t}/{ntimes})...")
+            start_time = time.time()
+            # slices[0] = t if ntimes > 1 else slice(None)
             index_vals, di = index_data(t, index_vals=None)
             di = {k: {**di, 
                       'index':k,
@@ -226,10 +278,13 @@ class ShareLabels:
             results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], nan_val) for k in index_vals) # process
             all_index_vals.extend(index_vals) # collect mappings
             all_results.extend(results)
+            durations.append(time.time() - start_time)
+        logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
 
         # clean mappings
+        n_init = len(all_results)
         all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
-        logging.info(f"{datetime.now()} Found {len(all_index_vals)} label maps")
+        logging.info(f"{datetime.now()} {n_init} label maps reduced to {len(all_results)}")
         return all_index_vals, all_results
 
 

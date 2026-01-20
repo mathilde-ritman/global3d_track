@@ -52,10 +52,10 @@ class Helpers:
             ds.altitude.attrs['standard_name'] = 'altitude'
         return ds
     
-    def _table_to_dataset(self, table, col, dataset):
-        di = table.set_index('feature')[col].to_dict()
-        feature_array = dataset['feature'].values
-        dataarray = xr.DataArray(np.vectorize(lambda x: di.get(x, -9))(feature_array), dims=dataset['feature'].dims, coords=dataset['feature'].coords)
+    def _table_to_dataset(self, table, col, dataset, base_col='feature'):
+        di = table.set_index(base_col)[col].to_dict()
+        feature_array = dataset[base_col].values
+        dataarray = xr.DataArray(np.vectorize(lambda x: di.get(x, -9))(feature_array), dims=dataset[base_col].dims, coords=dataset[base_col].coords)
         return dataarray
 
 

@@ -13,12 +13,13 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
 
 # Specify configuration file
-yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
+yaml_file="/home/b/b382635/s/my_notebooks/CSU/incus_icon.yaml"
+# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
 # yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
 
 # CHOOSE OPTIONS
 start_date=2021-07-01
-end_date=2021-07-02
+end_date=2021-07-03
 hours=24 # number of hours of data per job
 
 # Convert the dates to seconds since the Unix epoch
@@ -53,7 +54,7 @@ do
 
     ((count++))
 
-    if [ $count -eq 1 ]; then
+    if [ $count -eq 2 ]; then
         echo "Stopping for testing purposes."
         break
     fi

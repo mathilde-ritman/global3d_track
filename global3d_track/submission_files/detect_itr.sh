@@ -5,9 +5,9 @@
 # University of Oxford
 
 #SBATCH --job-name=detect_itr
-#SBATCH --partition=shared
-#SBATCH --time=00:20:00
-#SBATCH --mem=100GB
+#SBATCH --partition=compute
+#SBATCH --time=00:30:00
+#SBATCH --mem=250GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 

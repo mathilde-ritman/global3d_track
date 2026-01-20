@@ -7,17 +7,16 @@
 #SBATCH --partition=shared
 #SBATCH --time=00:10:00
 #SBATCH --mem=1GB
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1 
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 
 # Specify configuration file
-yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
+# yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_config_tropics.yaml"
 # yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/track_dev_config.yaml"
+yaml_file="/home/b/b382635/s/global3d_track/global3d_track/scripts/track/incus_icon.yaml"
 
 # CHOOSE OPTIONS
-start_date=2021-07-02
+start_date=2021-07-01
 end_date=2021-07-03
 hours=4 # number of hours of data per job
 

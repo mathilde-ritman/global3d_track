@@ -34,30 +34,33 @@ def track_object(di, obj_name, start_date, end_date, version):
     # - run and checkpoint management
 
     overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
-    fdata_dir = Path(di['feature_data_directory']) / f"{di['region']}/{start_date.strftime('%Y%m%d')}"
+    feature_dir = Path(di['feature_data_directory']) / f"{di['region']}/{start_date.strftime('%Y%m%d')}"
     data_dir = Path(di['data_directory']) / version
     check_dir = Path(di['checkpoint_directory']) / version
     checkpoint = Checkpoint(check_dir)
     obj_di = di['objects'][obj_name]
+    logging.info(f"{datetime.now()} processing object {obj_name}")
+    logging.info(obj_di)
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config'])
     name = obj_di['name']
-    final_save_dir = Path(data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_{name}_tracks.nc")
+    final_tracks_path = Path(data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_{name}_tracks.nc")
 
     # - what tracking are we doing?
 
-    skip_contiguity = skip_erode = False
+    skip_contiguity = skip_erode = True
     if obj_di['methods'].get('erode', 0) > 0:
-        skip_contiguity = True # we want to perform some eroded object tracking
+        skip_contiguity = True # this is wrapped up in erode, so don't do it twice
+        skip_erode = False
     elif obj_di['methods'].get('connect', False):
-        skip_erode = True # we want to perform some connected object tracking
+        skip_contiguity = False # perform some connected object tracking please
     elif 'track' not in obj_di['methods']['tobac']:
-        warnings.warn('you need to specify a tracking method for tobac at a minumum.')
+        warnings.warn('you need to specify a tracking method for tobac.')
 
     # - done already?!
         
-    if final_save_dir.exists() and not overwrite:
-        logging.info(f"{datetime.now()} loaded {name} tracks from {final_save_dir}")
-        track_mask = xr.open_dataset(final_save_dir)
+    if final_tracks_path.exists() and not overwrite:
+        logging.info(f"{datetime.now()} loaded {name} tracks from {final_tracks_path}")
+        track_mask = xr.open_dataset(final_tracks_path)
         return track_mask.where(track_mask > 0)
     
     d = f'{name}_tracking/' # subfolder for checkpointing current object
@@ -73,7 +76,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         PBC_flag = "hdim_2"
     if region == 'global':
         PBC_flag = "hdim_2"
-    modify_parameters = dict(savedir=fdata_dir, PBC_flag=PBC_flag,)
+    modify_parameters = dict(savedir=feature_dir, PBC_flag=PBC_flag,)
     slabs_checkpoint = checkpoint if di['share_labels']['checkpoint'] else None
     n_k = di['share_labels'].get('n_k', 250)
 
@@ -86,7 +89,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         # prep
         logging.info(f"{datetime.now()} tobac tracking...")
         tobac_methods = {m: True for m in obj_di['methods']['tobac']} | {'save': True}
-        utils.tools.collect_tobac_features(fdata_dir, name)
+        utils.tools.collect_tobac_features(feature_dir, name)
 
         # track using tobac
         module = methods.tobac_wrapper.Track(None, None, tobac_config, overwrite_tracks=overwrite, track_params=modify_parameters)
@@ -124,7 +127,8 @@ def track_object(di, obj_name, start_date, end_date, version):
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k)
+        record_mappings = dict(path=feature_dir, current_col='cell', update_col='eroded_contiguity')
+        eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
         track_mask['tracks'] = eroded_tracks
 
         checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int32), f'{d}erode-resulting_tracks')
@@ -147,7 +151,8 @@ def track_object(di, obj_name, start_date, end_date, version):
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
 
-        connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k)
+        record_mappings = dict(path=feature_dir, current_col='cell', update_col='contiguity')
+        connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
         connect_tracks = methods.misc.force_consecutive_labels(connect_tracks)
         track_mask['tracks'] = connect_tracks
 
@@ -155,13 +160,15 @@ def track_object(di, obj_name, start_date, end_date, version):
 
     # final result
     logging.info(f"{datetime.now()} saving...")
+    if not 'tracks' in track_mask.data_vars:
+        track_mask['tracks'] = track_mask.cell
     checkpoint.checkpoint_dataset(track_mask.fillna(NAN).astype(np.int32), f'{d}tracks')
     final_loc = checkpoint.record[f'{d}tracks']
-    result = os.system(f'scp {final_loc} {final_save_dir}')
+    result = os.system(f'scp {final_loc} {final_tracks_path}')
     if result != 0:
         logging.error("SCP command failed.")
 
-    logging.info(f"{datetime.now()} Saved {name} result to {final_save_dir}.")
+    logging.info(f"{datetime.now()} Saved {name} result to {final_tracks_path}.")
 
     return track_mask
 
@@ -180,19 +187,20 @@ def main(yaml_file, start_date, end_date):
     utils.tools.make_directories((data_dir, check_dir))
     checkpoint = Checkpoint(check_dir, overwrite = (overwrite and restart_checkpoints))
     objects_to_track = track_di['objects'].keys()
-    final_save_dir = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
+    tracks_record_path = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_label_mappings.h5"
+    final_tracks_path = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
 
     # - done already?!
         
-    if final_save_dir.exists() and not overwrite:
-        logging.info(f"{datetime.now()} system tracks exist already at {final_save_dir}")
+    if final_tracks_path.exists() and not overwrite:
+        logging.info(f"{datetime.now()} system tracks exist already at {final_tracks_path}")
         exit()
 
     n = 'system/tracks' # path for checkpointing
     if checkpoint.checkpoint_reached(n) and not restart_checkpoints:
         loc = checkpoint.record[n]
-        result = os.system(f'scp {loc} {final_save_dir}')
-        logging.info(f"System tracks already exist at {loc}. Copied to {final_save_dir}. Exiting.")
+        result = os.system(f'scp {loc} {final_tracks_path}')
+        logging.info(f"System tracks already exist at {loc}. Copied to {final_tracks_path}. Exiting.")
         exit()
 
     #  - track each object as per yaml
@@ -233,7 +241,8 @@ def main(yaml_file, start_date, end_date):
 
         # now get the overall system
         logging.info(f"{datetime.now()} share labels...")
-        result = methods.ShareLabels().share_labels_parallel(get_da(mask_get), get_da(mask_give), nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name='final/', n_k=n_k)
+        record_mappings = dict(path=tracks_record_path, current_col=order[1], update_col=order[0])
+        result = methods.ShareLabels().share_labels_parallel(get_da(mask_get), get_da(mask_give), nan_val=1e10, n_k=n_k, checkpoint=slabs_checkpoint, checkpoint_name='final/', record=record_mappings)
         overall_system = methods.misc.union_all([result, get_da(mask_give)])
 
         # collect results
@@ -249,12 +258,12 @@ def main(yaml_file, start_date, end_date):
     logging.info(f"{datetime.now()} saving...")
     checkpoint.checkpoint_dataset(final.fillna(NAN).astype(np.int32), n)
     final_loc = checkpoint.record[n]
-    final_save_dir = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
-    result = os.system(f'scp {final_loc} {final_save_dir}')
+    final_tracks_path = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
+    result = os.system(f'scp {final_loc} {final_tracks_path}')
     if result != 0:
         logging.error("SCP command failed.")
 
-    logging.info(f"{datetime.now()} Saved result to {final_save_dir}.")
+    logging.info(f"{datetime.now()} Saved result to {final_tracks_path}.")
         
 
 
