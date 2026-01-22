@@ -46,10 +46,13 @@ def add_height_data(dataset, height_values):
     return dataset.swap_dims({'level_full': 'height'})
 
 
-def load_tobac_data(variables, region, start_date, end_date):
+def load_tobac_data(variables, region, start_date, end_date, model_version='4008a'):
     # load data
     cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
-    dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+    if model_version=='4008a':
+        dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+    else:
+        raise ValueError("Model version not implemented")
     # process data
     # ensure no repeats in the variables
     variables = list(set(list(variables) + ['zghalf','zg']))

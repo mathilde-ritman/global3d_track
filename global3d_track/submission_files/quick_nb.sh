@@ -28,10 +28,10 @@ nb_path=/home/b/b382635/s/my_notebooks/dataset_paper/acp_submission/scripts/03.a
 # python $nb_path.py
 
 jupyter nbconvert $nb_path.ipynb --to python
-batch=1
+batch=14
 size=50
 
-while (( batch * size <= 1100 ))
+while (( batch * size <= 1200 ))
 do
     # submit job
     echo "Processing script for batch: $batch with size: $size"

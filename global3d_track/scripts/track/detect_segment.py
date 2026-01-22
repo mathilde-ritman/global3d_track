@@ -29,7 +29,7 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     # - run and checkpoint management
 
     overwrite = di['overwrite']
-    data_dir = Path(di['feature_data_directory']) / f"{di['region']}/{start_date.strftime('%Y%m%d')}"
+    data_dir = Path(di['data_directory']) / utils.tools.version_str(di)
     data_dir.mkdir(parents=True, exist_ok=True)
     obj_di = di['objects'][obj_name]
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config'])
@@ -39,8 +39,6 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     region = di['region']
     PBC_flag = None
     if region == 'tropics':
-        PBC_flag = "hdim_2"
-    if region == 'global':
         PBC_flag = "hdim_2"
     modify_parameters = dict(savedir=data_dir, PBC_flag=PBC_flag,)
     
@@ -53,7 +51,7 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     if not isinstance(seg, list):
         seg = [seg,]
     logging.info(f"{datetime.now()} loading data for detection and segmentation: {sel} and {seg} -> {sel+seg}")
-    data = utils.data_tools.load_tobac_data(sel+seg, di['region'], start_date, end_date)
+    data = utils.data_tools.load_tobac_data(sel+seg, di['region'], start_date, end_date, di['model_version'])
     # ++ add input variables if multiple (e.g., cli+clw)
     if isinstance(sel, list):
         data['+'.join(sel)] = functools.reduce(np.add, [data[var] for var in sel])
@@ -64,7 +62,6 @@ def detect_segment_object(di, obj_name, start_date, end_date):
 
     # - processing
 
-    tobac_methods = obj_di['methods']['tobac']
     version_name = f"{obj_di['name']}/{start_date.strftime('T%H%M')}_{end_date.strftime('T%H%M')}"
     track_params = modify_parameters | {'version_name': version_name}
     module = methods.tobac_wrapper.Track(data[sel], data[seg], tobac_config, overwrite=overwrite, track_params=track_params)

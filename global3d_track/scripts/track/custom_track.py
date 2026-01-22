@@ -15,6 +15,7 @@ import gc
 import numpy as np
 from pathlib import Path
 from datetime import datetime
+import sys
 from ..src import utils, methods
 Checkpoint = utils.checkpoint.Checkpoint
 
@@ -27,16 +28,15 @@ Checkpointing is implemented following key steps. Data checkpointed are saved to
 '''
 
 
-def track_object(di, obj_name, start_date, end_date, version):
+def track_object(di, obj_name, start_date, end_date, version_details):
 
     NAN = -9
 
     # - run and checkpoint management
 
     overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
-    feature_dir = Path(di['feature_data_directory']) / f"{di['region']}/{start_date.strftime('%Y%m%d')}"
-    data_dir = Path(di['data_directory']) / version
-    check_dir = Path(di['checkpoint_directory']) / version
+    data_dir = Path(di['data_directory']) / version_details
+    check_dir = Path(di['checkpoint_directory']) / version_details
     checkpoint = Checkpoint(check_dir)
     obj_di = di['objects'][obj_name]
     logging.info(f"{datetime.now()} processing object {obj_name}")
@@ -76,7 +76,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         PBC_flag = "hdim_2"
     if region == 'global':
         PBC_flag = "hdim_2"
-    modify_parameters = dict(savedir=feature_dir, PBC_flag=PBC_flag,)
+    modify_parameters = dict(savedir=data_dir, PBC_flag=PBC_flag,)
     slabs_checkpoint = checkpoint if di['share_labels']['checkpoint'] else None
     n_k = di['share_labels'].get('n_k', 250)
 
@@ -89,7 +89,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         # prep
         logging.info(f"{datetime.now()} tobac tracking...")
         tobac_methods = {m: True for m in obj_di['methods']['tobac']} | {'save': True}
-        utils.tools.collect_tobac_features(feature_dir, name)
+        utils.tools.collect_tobac_features(data_dir, name)
 
         # track using tobac
         module = methods.tobac_wrapper.Track(None, None, tobac_config, overwrite_tracks=overwrite, track_params=modify_parameters)
@@ -127,7 +127,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        record_mappings = dict(path=feature_dir, current_col='cell', update_col='eroded_contiguity')
+        record_mappings = dict(path=data_dir, current_col='cell', update_col='eroded_contiguity')
         eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
         track_mask['tracks'] = eroded_tracks
 
@@ -151,7 +151,7 @@ def track_object(di, obj_name, start_date, end_date, version):
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
 
-        record_mappings = dict(path=feature_dir, current_col='cell', update_col='contiguity')
+        record_mappings = dict(path=data_dir, current_col='cell', update_col='contiguity')
         connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
         connect_tracks = methods.misc.force_consecutive_labels(connect_tracks)
         track_mask['tracks'] = connect_tracks
@@ -179,14 +179,14 @@ def main(yaml_file, start_date, end_date):
 
     # - load yaml and set up
 
-    track_di = utils.tools.load_yaml(yaml_file)
-    overwrite, restart_checkpoints = track_di['overwrite'], track_di['restart_checkpoints']
-    version = f"{track_di['link']['name']}/{track_di['region']}/{start_date.strftime('%Y%m%d')}"
-    data_dir = Path(track_di['data_directory']) / version
-    check_dir = Path(track_di['checkpoint_directory']) / version
+    di = utils.tools.load_yaml(yaml_file)
+    overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
+    version_details = utils.tools.version_str(di)
+    data_dir = Path(di['data_directory']) / version_details
+    check_dir = Path(di['checkpoint_directory']) / version_details
     utils.tools.make_directories((data_dir, check_dir))
     checkpoint = Checkpoint(check_dir, overwrite = (overwrite and restart_checkpoints))
-    objects_to_track = track_di['objects'].keys()
+    objects_to_track = di['objects'].keys()
     tracks_record_path = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_label_mappings.h5"
     final_tracks_path = data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_system_tracks.nc"
 
@@ -194,14 +194,14 @@ def main(yaml_file, start_date, end_date):
         
     if final_tracks_path.exists() and not overwrite:
         logging.info(f"{datetime.now()} system tracks exist already at {final_tracks_path}")
-        exit()
+        sys.exit()
 
     n = 'system/tracks' # path for checkpointing
     if checkpoint.checkpoint_reached(n) and not restart_checkpoints:
         loc = checkpoint.record[n]
         result = os.system(f'scp {loc} {final_tracks_path}')
-        logging.info(f"System tracks already exist at {loc}. Copied to {final_tracks_path}. Exiting.")
-        exit()
+        logging.info(f"System tracks already exist at {loc}. Copied to {final_tracks_path}. sys.exiting.")
+        sys.exit()
 
     #  - track each object as per yaml
 
@@ -209,30 +209,30 @@ def main(yaml_file, start_date, end_date):
     for obj in objects_to_track:
         task_start = datetime.now()
         logging.info(f"{task_start} procesing object {obj}")
-        tracked_mask[obj] = track_object(track_di, obj, start_date, end_date, version).astype(np.int32)
+        tracked_mask[obj] = track_object(di, obj, start_date, end_date, version_details).astype(np.int32)
         logging.info(f"{datetime.now()} done with {obj}. Took {datetime.now() - task_start}.")
 
     # - apply any required mask overlap filtering
         
     for obj in objects_to_track:
-        obj_di = track_di['objects'][obj]
-        if isinstance(obj_di['require_overlap'], str):
+        obj_di = di['objects'][obj]
+        if isinstance(obj_di['require_overlap_with'], str):
             if checkpoint.checkpoint_reached(f'{obj}_tracking/tracks') and 'overlap_tracks' in checkpoint.load_dataset(f'{obj}_tracking/tracks', nan_value=NAN).data_vars:
                 tracked_mask[obj] = checkpoint.load_dataset(f'{obj}_tracking/tracks', nan_value=NAN)
             else:
                 # calculate
-                logging.info(f"{datetime.now()} requiring overlap of {obj} with {obj_di['require_overlap']}...")
-                tracked_mask[obj]['overlap_tracks'] = methods.misc.child_that_overlaps(tracked_mask[obj_di['require_overlap']].tracks, tracked_mask[obj].tracks)
+                logging.info(f"{datetime.now()} requiring overlap of {obj} with {obj_di['require_overlap_with']}...")
+                tracked_mask[obj]['overlap_tracks'] = methods.misc.child_that_overlaps(tracked_mask[obj_di['require_overlap_with']].tracks, tracked_mask[obj].tracks)
                 checkpoint.checkpoint_dataset(tracked_mask[obj].fillna(NAN).astype(np.int32), f'{obj}_tracking/tracks')
 
     # - link the object tracks into one big tracked system
         
-    order = track_di['link']['order'].split('->')
-    slabs_checkpoint = checkpoint if track_di['share_labels']['checkpoint'] else None
-    n_k = track_di['share_labels'].get('n_k', 250)
+    order = di['multivariate']['link_order'].split('->')
+    slabs_checkpoint = checkpoint if di['share_labels']['checkpoint'] else None
+    n_k = di['share_labels'].get('n_k', 250)
     if len(order) == 2:
         # collect tracks 
-        logging.info(f"{datetime.now()} collecting tracks for order {track_di['link']['order']}...")
+        logging.info(f"{datetime.now()} collecting tracks for order {di['multivariate']['link_order']}...")
         def get_da(m):
             return m.tracks if not 'overlap_tracks' in m.data_vars else m.overlap_tracks
         mask_give = tracked_mask[order[0]]
@@ -246,13 +246,17 @@ def main(yaml_file, start_date, end_date):
         overall_system = methods.misc.union_all([result, get_da(mask_give)])
 
         # collect results
-        mask_give_n = track_di['objects'][order[0]]['shortname']
-        mask_get_n = track_di['objects'][order[1]]['shortname']
-        final = xr.Dataset({'system': overall_system,
-                            f'{mask_give_n}_tracks': mask_give.tracks,
-                            f'{mask_get_n}_tracks': mask_get.tracks})
+        mask_give_n = di['objects'][order[0]]['shortname']
+        mask_get_n = di['objects'][order[1]]['shortname']
+        final = xr.Dataset({'system': overall_system,})
+        
+        if di['objects'][order[0]].get('keep_result', False):
+            final[f'{mask_give_n}_tracks'] = mask_give.tracks
+        if di['objects'][order[1]].get('keep_result', False):
+            final[f'{mask_get_n}_tracks'] = mask_get.tracks
+
     else:
-        raise NotImplementedError(f"share labels for case like {track_di['link']['order']} not implemented")
+        raise NotImplementedError(f"share labels for case like {di['link']['order']} not implemented")
 
     # save result :-)
     logging.info(f"{datetime.now()} saving...")

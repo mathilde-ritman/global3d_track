@@ -84,6 +84,10 @@ def load_yaml(yaml_file):
         di = yaml.safe_load(f)
     return di
 
+def version_str(yaml):
+    datestr = datetime.strptime(yaml['start_date'], "%Y-%m-%d %H:%M:%S").strftime('%Y%m%d')
+    return yaml['version_name'] + yaml['region'] + datestr
+
 def collect_tobac_features(sdir, feature_type):
     ''' Collect features from multiple files '''
     # collect table of all features in directory
@@ -104,7 +108,6 @@ def collect_tobac_features(sdir, feature_type):
         m = xr.concat((m, next_m), dim='time')
     m.to_netcdf(sdir + f'/{feature_type}/segmented_mask.nc')
     m.close()
-
 
 def make_directories(dirs):
     ''' Make directories if they do not exist '''
