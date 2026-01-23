@@ -7,6 +7,7 @@ import xarray as xr
 import numpy as np
 from scipy import ndimage as ndi
 import datetime
+import os
 import logging
 from datetime import datetime
 import joblib
@@ -98,7 +99,10 @@ class ShareLabels:
         # 2. record the mappings in the tobac feature table
         logging.info(f"{datetime.now()} Applying label mappings to dataframe...")
         table_path = pathlib.Path(table_path)
-        df = pd.read_hdf(table_path, 'table') # load feature table
+        if os.path.exists(table_path):
+            df = pd.read_hdf(table_path, 'table') # load feature table
+        else:
+            df = pd.DataFrame({current_col: np.unique(current.values)})
         mapping = dict(zip(index, new)) # as dict
         # apply
         df[update_col] = df[current_col].map(mapping).fillna(0) # record as new column
