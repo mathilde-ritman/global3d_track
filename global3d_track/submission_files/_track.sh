@@ -30,7 +30,7 @@ echo processing $region between dates $start_date and $end_date
 echo batch period is $hours hours
 
 # Loop
-chmod +x /home/b/b382635/s/global3d_track/global3d_track/submission_files/track_itr.sh
+chmod +x /home/b/b382635/s/global3d_track/global3d_track/submission_files/_track_itr.sh
 while [ $current_end_date_sec -le $end_date_sec ]
 do
     # Convert the current date in seconds to the YYYY-MM-DD format
@@ -39,7 +39,7 @@ do
 
     # Submit job
     echo submitted for start $datetime
-    sbatch /home/b/b382635/s/global3d_track/global3d_track/submission_files/track_itr.sh $yaml_file $current_start_dt $current_end_dt
+    sbatch /home/b/b382635/s/global3d_track/global3d_track/submission_files/_track_itr.sh $yaml_file $current_start_dt $current_end_dt
 
     # Next iteration
     current_date_sec=$current_end_date_sec

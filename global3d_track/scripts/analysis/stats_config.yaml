@@ -17,11 +17,19 @@ end_date: '2021-07-08 00:00:00' # [ALSO NEEDS SETTING IN .SH]
 
 # which sets of statistics would you like to calculate
 results:
-  grl_bucket:
-    name: grl_bucket
-    shortname: grl
-    function: GRLBucket
-    parameters: False # nothing to pass
+  focus:
+    name: focus_bucket
+    shortname: fcs
+    function: FocusBucketAC
+    parameters: False # parameters to pass to funciton call
+    use_stats: False # whether to use the statistics from the first buckets
+  focus:
+    name: first_bucket
+    shortname: first
+    function: FirstBucket
+    parameters: 
+       overall: False # parameters to pass to funciton call
+    use_stats: False # whether to use the statistics from the first buckets
   # cross_section:
   #   name: cross_section
   #   shortname: cross
@@ -34,6 +42,6 @@ batch_size: 4 # number of time steps to process at once
 
 # for system-wise analysis
 batch_system: 4 # number of systems to process at once
-system_wise_version: 'grl_no_development' # sets results directory and how to filter valid systems
-max_system_size: 10000 # (pixels) maximum size of a system to process
+system_wise_version: 'fcsfirst' # sets results directory and how to filter valid systems
+# max_system_size: None # (pixels) maximum size of a system to process
 start_idx: 0 # (cloud number, out of remaining) where to start from
