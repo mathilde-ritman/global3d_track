@@ -28,15 +28,15 @@ Checkpointing is implemented following key steps. Data checkpointed are saved to
 '''
 
 
-def track_object(di, obj_name, start_date, end_date, version_details):
+def track_object(di, obj_name, start_date, end_date, version_name):
 
     NAN = -9
 
     # - run and checkpoint management
 
     overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
-    data_dir = Path(di['data_directory']) / version_details
-    check_dir = Path(di['checkpoint_directory']) / version_details
+    data_dir = Path(di['data_directory']) / version_name
+    check_dir = Path(di['checkpoint_directory']) / version_name
     checkpoint = Checkpoint(check_dir)
     obj_di = di['objects'][obj_name]
     logging.info(f"{datetime.now()} processing object {obj_name}")
@@ -181,9 +181,9 @@ def main(yaml_file, start_date, end_date):
 
     di = utils.tools.load_yaml(yaml_file)
     overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
-    version_details = utils.tools.version_str(di)
-    data_dir = Path(di['data_directory']) / version_details
-    check_dir = Path(di['checkpoint_directory']) / version_details
+    version_name = utils.tools.version_name(di)
+    data_dir = Path(di['data_directory']) / version_name
+    check_dir = Path(di['checkpoint_directory']) / version_name
     utils.tools.make_directories((data_dir, check_dir))
     checkpoint = Checkpoint(check_dir, overwrite = (overwrite and restart_checkpoints))
     objects_to_track = di['objects'].keys()
@@ -209,7 +209,7 @@ def main(yaml_file, start_date, end_date):
     for obj in objects_to_track:
         task_start = datetime.now()
         logging.info(f"{task_start} procesing object {obj}")
-        tracked_mask[obj] = track_object(di, obj, start_date, end_date, version_details).astype(np.int32)
+        tracked_mask[obj] = track_object(di, obj, start_date, end_date, version_name).astype(np.int32)
         logging.info(f"{datetime.now()} done with {obj}. Took {datetime.now() - task_start}.")
 
     # - apply any required mask overlap filtering

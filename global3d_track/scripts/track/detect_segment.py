@@ -29,7 +29,7 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     # - run and checkpoint management
 
     overwrite = di['overwrite']
-    data_dir = Path(di['data_directory']) / utils.tools.version_str(di)
+    data_dir = Path(di['data_directory']) / utils.tools.version_name(di)
     data_dir.mkdir(parents=True, exist_ok=True)
     obj_di = di['objects'][obj_name]
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config'])

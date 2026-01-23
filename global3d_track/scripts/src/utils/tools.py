@@ -11,6 +11,7 @@ import tobac
 import logging
 import yaml
 import os
+import pathlib
 import glob
 # Set up the logging configuration
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
@@ -84,9 +85,9 @@ def load_yaml(yaml_file):
         di = yaml.safe_load(f)
     return di
 
-def version_str(yaml):
+def version_name(yaml):
     datestr = datetime.strptime(yaml['start_date'], "%Y-%m-%d %H:%M:%S").strftime('%Y%m%d')
-    return yaml['version_name'] + yaml['region'] + datestr
+    return pathlib.Path(yaml['version_name'], yaml['region'], datestr)
 
 def collect_tobac_features(sdir, feature_type):
     ''' Collect features from multiple files '''

@@ -13,7 +13,6 @@ import joblib
 import time
 import pandas as pd
 import pathlib
-from .tobac_wrapper import Helpers
 
 class ShareLabels:
 
@@ -22,8 +21,106 @@ class ShareLabels:
 
     '''
 
-    def __init__(self):
-        pass
+    def __init__(self, nan_val=1e10, n_jobs=-1, checkpoint=None, checkpoint_name=None):
+        '''
+        nan_val: needs to be larger than any label in the input dataarrays
+        n_jobs: numper of jobs to processs in parrallel when searching for matching features between the two input arrays
+        don't bother with the checkpoint options unless you are using the class I've built, it will break.
+        '''
+        self.nan_val=nan_val
+        self.n_jobs=n_jobs
+        self.checkpoint=checkpoint
+        self.checkpoint_name=checkpoint_name
+
+    #### ----------------------- main functions to call, two options ----------------------- ####
+
+    def dataarrays(self, current: xr.DataArray, update: xr.DataArray):
+        '''
+        Share the coincident labels of 'update' to 'current' and return the resulting dataarray.
+        current: integer dataarray
+        update: integer dataarray
+        '''
+        
+        # 1. find mappings, or load them from the checkpoint
+        checkdir = f'{self.checkpoint_name}label_mappings/'
+        if self.checkpoint is not None and self.checkpoint.checkpoint_reached(f'{checkdir}min_k_in_data'):  
+            # load them
+            index = self.checkpoint.load_array(f'{checkdir}all_index_vals').tolist()
+            new = self.checkpoint.load_array(f'{checkdir}all_results').tolist()
+
+        else:
+            # find them
+            index, new = self.find_labels_parallel(current, update)
+            # and checkpoint them if you want
+            if self.checkpoint is not None:
+                self.checkpoint.checkpoint_array(np.array(index), f'{checkdir}index_vals')
+                self.checkpoint.checkpoint_array(np.array(new), f'{checkdir}new_vals')
+
+        # 2. collect the mappings in a table
+        mapping = dict(zip(index, new)) # as dict
+        df = pd.DataFrame({'current': np.unique(current.values)})
+        df['update'] = df['current'].map(mapping).fillna(0) # record as new column
+
+        # 3. apply the mappings to the mask dataset
+        logging.info(f"{datetime.now()} Applying label mappings to dataset...")
+        dataset = current.to_dataset(name='current')
+        result = self.table_to_dataset(df, 'update', dataset, 'current')
+        logging.info(f"{datetime.now()} done.")
+
+        return result.where(result>0)
+
+    def tobac_like(self, current: xr.DataArray, update: xr.DataArray, table_path: str, current_col: str, update_col: str):
+        '''
+        Share the coincident labels of 'update' to 'current' but with record keeping. Returns the resulting dataarray and saves a new pandas table at the same directory as 'table_path' with the changes recorded.
+        current: integer dataarray
+        update: integer dataarray
+        table_path: path to the tobac-like feature table
+        current_col: column name in the tobac-like feature table corresponding to the current feature labels in 'current'
+        update_col: name to call the new column that will record the mappings applied by this function
+        '''
+        
+        # 1. find mappings, or load them from the checkpoint
+        checkdir = f'{self.checkpoint_name}label_mappings/'
+        if self.checkpoint is not None and self.checkpoint.checkpoint_reached(f'{checkdir}min_k_in_data'):  
+            # load them
+            index = self.checkpoint.load_array(f'{checkdir}all_index_vals').tolist()
+            new = self.checkpoint.load_array(f'{checkdir}all_results').tolist()
+
+        else:
+            # find them
+            index, new = self.find_labels_parallel(current, update)
+            # and checkpoint them if you want
+            if self.checkpoint is not None:
+                self.checkpoint.checkpoint_array(np.array(index), f'{checkdir}index_vals')
+                self.checkpoint.checkpoint_array(np.array(new), f'{checkdir}new_vals')
+
+        # 2. record the mappings in the tobac feature table
+        logging.info(f"{datetime.now()} Applying label mappings to dataframe...")
+        table_path = pathlib.Path(table_path)
+        df = pd.read_hdf(table_path, 'table') # load feature table
+        mapping = dict(zip(index, new)) # as dict
+        # apply
+        df[update_col] = df[current_col].map(mapping).fillna(0) # record as new column
+        # save the table with the suffix '_{update_col}'
+        outpath = table_path.with_name(f"{table_path.stem}_{update_col}{table_path.suffix}")
+        df.to_hdf(outpath, 'table')
+        logging.info(f"{datetime.now()} saved table to {outpath}.")
+
+        # 3. apply the mappings to the mask dataset
+        logging.info(f"{datetime.now()} Applying label mappings to dataset...")
+        dataset = current.to_dataset(name=current_col)
+        result = self.table_to_dataset(df, update_col, dataset, current_col)
+        logging.info(f"{datetime.now()} done.")
+
+        return result.where(result>0)
+
+    #### --------------------- helpers ----------------------- ####
+
+    def table_to_dataset(self, table, col, dataset, base_col='feature'):
+        di = table.set_index(base_col)[col].to_dict()
+        feature_array = dataset[base_col].values
+        dataarray = xr.DataArray(np.vectorize(lambda x: di.get(x, -9))(feature_array), dims=dataset[base_col].dims, coords=dataset[base_col].coords)
+        return dataarray
 
     def compute_share_labels(self, chunk, nan_val=1e10):
         label_map = np.zeros_like(chunk['update'], dtype=int)
@@ -62,203 +159,19 @@ class ShareLabels:
         unique_A = list(min_values.keys())
         unique_B = list(min_values.values())
         return unique_A, unique_B
-
-    def share_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None, record={}):
-        ''' Update to V0 that records the mappings applies in a dataframe, and more efficiently updates the output mask.
-        'record' requires:
-            - 'path': str path to the .h5 file where the tracking dataframe is stored for the input array current
-            - 'current_col': str name of the column in the dataframe corresponding to the current array labels
-            - 'update_col': str name of the column in the dataframe corresponding to the array labels resulting from this function call
-        '''
-
-        # find or load mappings
-        d_maps = f'{checkpoint_name}label_mappings/'
-        if checkpoint is not None and checkpoint.checkpoint_reached(f'{d_maps}min_k_in_data'):
-            index = checkpoint.load_array(f'{d_maps}all_index_vals').tolist()
-            new = checkpoint.load_array(f'{d_maps}all_results').tolist()
-        else:
-            index, new = self.find_labels_parallel(current, update, nan_val, n_jobs)
-            if checkpoint is not None:
-                checkpoint.checkpoint_array(np.array(index), f'{d_maps}index_vals')
-                checkpoint.checkpoint_array(np.array(new), f'{d_maps}new_vals')
-
-        # record mappings in dataframe
-        logging.info(f"{datetime.now()} Applying label mappings to dataframe...")
-        path = pathlib.Path(record['path'])
-        mapping = dict(zip(index, new))
-        if path.exists():
-            df = pd.read_hdf(path, 'table')
-        else:
-            df = pd.DataFrame()
-            df[record['current_col']] = np.unique(current.values)
-        df[record['update_col']] = df[record['current_col']].map(mapping).fillna(0)
-        outpath = path.with_name(f"{path.stem}_{record['update_col']}{path.suffix}")
-        df.to_hdf(outpath, 'table')
-        logging.info(f"{datetime.now()} saved table to {outpath}.")
-
-        # apply to the mask dataset
-        logging.info(f"{datetime.now()} Applying label mappings to dataset...")
-        dataset = current.to_dataset(name=record['current_col'])
-        result = Helpers()._table_to_dataset(df, record['update_col'], dataset, record['current_col'])
-        logging.info(f"{datetime.now()} done.")
-
-        return result.where(result>0)
-    
-    
-    # main    
-    def share_labels_parallel_v0(self, current, update, nan_val=1e10, n_jobs=-1, n_k=250, checkpoint=None, checkpoint_name=None):
-        '''
-        Identifies the labels of features in the current field (L={...}) that overlap with features in the update field (L_update=integer). Then assigns L_update to each l in L. Uses multiprocessing and iteration to do each time step independently, but retains memory of the changes so that results are not impacted by iterating time.
-        Parameters:
-            current: xr.DataArray
-                The current field of labels to be updated
-            update: xr.DataArray
-                The field of labels to use to update the current field
-            nan_val: int
-                The value to use for missing values is ndi.labelled_comprehension
-            n_jobs: int
-                The number of jobs to
-            n_k: int
-                The batch size to use when applying the label mappings in parallel. A larger batch size will use more memory but may be faster.
-        '''
-        # initalise
-        current = current.fillna(nan_val).astype(int) # xr.dataarray
-        update = update.fillna(nan_val).astype(int) # xr.dataarray
-        new_labels = np.zeros(update.shape, dtype=int) # np.array
-        ntimes = len(current.time) if 'time' in current.dims else 1 # int
-        update_tshape = current.isel(time=0).shape if ntimes > 1 else update.shape # tuple
-        durations, all_results, all_index_vals = [], [], [] # store results of each time step
-        max_k_in_data, min_k_in_data = {}, {}
-        slices = [slice(None)] * len(current.dims) # list
-
-        # check checkpoints
-        d_maps = f'{checkpoint_name}label_mappings/'
-        flag = 0
-        if checkpoint is not None and checkpoint.checkpoint_reached(f'{d_maps}min_k_in_data'):
-            all_index_vals = checkpoint.load_array(f'{d_maps}all_index_vals').tolist()
-            all_results = checkpoint.load_array(f'{d_maps}all_results').tolist()
-            max_k_in_data_arr = checkpoint.load_array(f'{d_maps}max_k_in_data')
-            min_k_in_data_arr = checkpoint.load_array(f'{d_maps}min_k_in_data')
-            max_k_in_data = {t:max_k_in_data_arr[t] for t in range(len(max_k_in_data_arr))}
-            min_k_in_data = {t:min_k_in_data_arr[t] for t in range(len(min_k_in_data_arr))}
-            flag = 1
-
-        def index_data(t, index_vals=None):
-            # index time t
-            current_arr = current.isel(time=t).values.reshape(-1) if ntimes > 1 else current.values.reshape(-1)
-            update_arr = update.isel(time=t).values.reshape(-1) if ntimes > 1 else update.values.reshape(-1)
-            if index_vals is None:
-                index_vals = [x for x in np.unique(current_arr) if x > 0 and x != nan_val]
-            di = {'current':current_arr,
-                  'update':update_arr,}
-            return index_vals, di
-
-        # iterate times to collect label mappings
-        if not flag:
-            logging.info(f"{datetime.now()} Finding label maps: {ntimes} iterations")
-            for t in range(ntimes):
-                if t % 10 == 0:
-                    logging.info(f"{datetime.now()} ({t}/{ntimes})...")
-                start_time = time.time()
-                index_vals, di = index_data(t, index_vals=None)
-                # logging.info(f"{datetime.now()} dataset time {t} has {len(index_vals)} unique values")
-                if len(index_vals) == 0:
-                    max_k_in_data[t] = 0
-                    min_k_in_data[t] = 0
-                    continue
-                di = {k: {**di, 
-                        'index':k,
-                        } for k in index_vals}
-                results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], nan_val) for k in index_vals) # process
-                max_k_in_data[t] = np.max(index_vals) # record max k for each time
-                min_k_in_data[t] = np.min(index_vals)
-                all_index_vals.extend(index_vals) # collect mappings
-                all_results.extend(results)
-                durations.append(time.time() - start_time)
-            logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
-
-            # clean mappings
-            n_values = len(all_results)
-            all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
-            logging.info(f"{datetime.now()} {n_values} label maps reduced to {len(all_results)}")
-
-            # save mappings
-            if checkpoint is not None:
-                checkpoint.checkpoint_array(np.array(all_index_vals), f'{d_maps}all_index_vals')
-                checkpoint.checkpoint_array(np.array(all_results), f'{d_maps}all_results')
-                checkpoint.checkpoint_array(np.array([max_k_in_data[t] for t in range(ntimes)]), f'{d_maps}max_k_in_data')
-                checkpoint.checkpoint_array(np.array([min_k_in_data[t] for t in range(ntimes)]), f'{d_maps}min_k_in_data')
-
-        # iterate times again to apply all mappings
-        durations = []
-        logging.info(f"{datetime.now()} Applying all label maps: {ntimes} iterations")
-        logging.info(f"{datetime.now()} {len(all_index_vals)} values, batch size = {n_k}")
-
-        # check checkpoints
-        t_latest = None
-        if checkpoint is not None:
-            d = f'{checkpoint_name}share_labels/'
-            # find latest checkpoint
-            latest_checkpoint = checkpoint.get_last_checkpoint(d)
-            logging.info(f"{datetime.now()} Latest checkpoint: {latest_checkpoint}")
-            if checkpoint.checkpoint_reached(latest_checkpoint):
-                new_labels = checkpoint.load_array(latest_checkpoint)
-                t_latest = int(latest_checkpoint.split('/')[-1].split('.')[0])
-                logging.info(f"{datetime.now()} Starting from ({t_latest+1}/{ntimes}).")
-
-        # apply remaining mappings
-        for t in range(ntimes):
-            if t_latest is not None and t <= t_latest:
-                continue
-            if t % 10 == 0:
-                logging.info(f"{datetime.now()} ({t}/{ntimes})...")
-            start_time = time.time()
-            slices[0] = t if ntimes > 1 else slice(None)
-            _, di = index_data(t, index_vals=all_index_vals)
-            di = {k: {**di, 
-                      'index':k,
-                      'result':all_results[i],
-                      } for i,k in enumerate(all_index_vals)}
-            # logging.info(f"{datetime.now()} dataset time {t} has value range ({min_k_in_data[t]}, {max_k_in_data[t]})")
-            for batch in range(0, len(all_index_vals), n_k):
-                batch_index_vals = all_index_vals[batch:batch+n_k]
-                # skip if there are no k in the current dataset for this batch
-                min_k = np.min(batch_index_vals)
-                max_k = np.max(batch_index_vals)
-                # if not t:
-                    # logging.info(f"{datetime.now()} batch ({batch}:{batch+n_k}) has value range ({min_k}, {max_k})")
-                if min_k > max_k_in_data[t] or max_k < min_k_in_data[t]:
-                    # logging.info(f"{datetime.now()} skipping batch ({batch}:{batch+n_k}) as batch vals ({min_k}, {max_k}) not in dataset vals ({min_k_in_data[t]}, {max_k_in_data[t]})")
-                    continue
-                results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.update_labels)(di[k]) for k in batch_index_vals)
-                for label_map in results:
-                    new_labels[tuple(slices)] += label_map.reshape(update_tshape) # apply all mappings
-            # if checkpoints are needed, save checkpoint
-            if checkpoint is not None and ((t % 10 == 0) or t == np.max(range(ntimes))):
-                checkpoint.checkpoint_array(new_labels, f'{d}{t}')
-                if t > 10 and (t % 10 == 0):
-                    checkpoint.remove_old(f'{d}{t-10}') # remove old checkpoints
-                elif t == np.max(range(ntimes)):
-                    checkpoint.remove_old(f'{d}{t - (t%10)}')
-                
-            durations.append(time.time() - start_time)
-        logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
-
-        da = xr.DataArray(data=new_labels, dims=update.dims, coords=update.coords)
-        da = da.where(da != nan_val)
-        return da.where(da>0)
         
-    def find_labels_parallel(self, current, update, nan_val=1e10, n_jobs=-1):
-        current = current.fillna(nan_val).astype(int)
-        update = update.fillna(nan_val).astype(int)
+    #### ------------------------- operators ------------------- ####
+    
+    def find_labels_parallel(self, current, update):
+        current = current.fillna(self.nan_val).astype(int)
+        update = update.fillna(self.nan_val).astype(int)
         ntimes = len(current.time) if 'time' in current.dims else 1
-        # slices = [slice(None)] * len(current.dims)
 
         def index_data(t, index_vals=None):
             current_arr = current.isel(time=t).values.reshape(-1) if ntimes > 1 else current.values.reshape(-1)
             update_arr = update.isel(time=t).values.reshape(-1) if ntimes > 1 else update.values.reshape(-1)
             if index_vals is None:
-                index_vals = [x for x in np.unique(current_arr) if x > 0 and x != nan_val]
+                index_vals = [x for x in np.unique(current_arr) if x > 0 and x != self.nan_val]
             di = {'current':current_arr,
                   'update':update_arr,}
             return index_vals, di
@@ -275,7 +188,7 @@ class ShareLabels:
             di = {k: {**di, 
                       'index':k,
                       } for k in index_vals}
-            results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], nan_val) for k in index_vals) # process
+            results = joblib.Parallel(n_jobs=self.n_jobs, prefer="threads")(joblib.delayed(self.find_labels)(di[k], self.nan_val) for k in index_vals) # process
             all_index_vals.extend(index_vals) # collect mappings
             all_results.extend(results)
             durations.append(time.time() - start_time)
@@ -286,49 +199,3 @@ class ShareLabels:
         all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
         logging.info(f"{datetime.now()} {n_init} label maps reduced to {len(all_results)}")
         return all_index_vals, all_results
-
-
-    def update_labels_parallel(self, current, all_index_vals, all_results, nan_val=1e10, n_jobs=-1, n_k=500):
-        current = current.fillna(nan_val).astype(int)
-        new_labels = np.zeros(current.shape, dtype=int)
-        ntimes = len(current.time) if 'time' in current.dims else 1
-        current_tshape = current.isel(time=0).shape if ntimes > 1 else current.shape
-        slices = [slice(None)] * len(current.dims)
-
-        def index_data(t, index_vals=None):
-            current_arr = current.isel(time=t).values.reshape(-1) if ntimes > 1 else current.values.reshape(-1)
-            if index_vals is None:
-                index_vals = [x for x in np.unique(current_arr) if x > 0 and x != nan_val]
-            di = {'current':current_arr,}
-            return index_vals, di
-
-        # clean mappings
-        all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
-
-        # apply mappings
-        logging.info(f"{datetime.now()} Applying all label maps: {ntimes} iterations")
-        logging.info(f"{datetime.now()} {len(all_index_vals)} values, batch size = {n_k}")
-        durations = []
-        for t in range(ntimes):
-            if t % 10 == 0:
-                logging.info(f"{datetime.now()} ({t}/{ntimes})...")
-            start_time = time.time()
-            slices[0] = t if ntimes > 1 else slice(None)
-            all_index_vals, di = index_data(t, index_vals=all_index_vals)
-            di = {k: {**di, 
-                      'index':k,
-                      'result':all_results[i],
-                      } for i,k in enumerate(all_index_vals)}
-            for batch in range(0, len(all_index_vals), n_k):
-                batch_index_vals = all_index_vals[batch:batch+n_k]
-                results = joblib.Parallel(n_jobs=n_jobs, prefer="threads")(joblib.delayed(self.update_labels)(di[k]) for k in batch_index_vals)
-                for label_map in results:
-                    new_labels[tuple(slices)] += label_map.reshape(current_tshape) # apply all mappings
-            durations.append(time.time() - start_time)
-            if t % 10 == 0:
-                logging.info(f"{datetime.now()} Avg duration: {sum(durations)/len(durations):.4f} seconds")
-
-        da = xr.DataArray(data=new_labels, dims=current.dims, coords=current.coords)
-        da = da.where(da != nan_val)
-        return da.where(da>0)
-    

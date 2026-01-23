@@ -14,8 +14,11 @@ master process to manage cloud tracking over one dataset with multiple slurm job
 
 def submit_job(script, arguments):
     # submit .sh file and get slurm job ID
-    cmd = ["sbatch", script] + list(arguments)
-    out = subprocess.check_output(cmd, text=True)
+    cmd = ["sbatch", str(script)] + list(arguments)
+    logging.info(cmd)
+    out = subprocess.run(cmd, check=True, capture_output=True)
+    logging.info(out)
+    # out = subprocess.check_output(cmd, text=True)
     job_id = out.strip().split()[-1]
     logging.info(f"{time.ctime()}: job submitted with ID {job_id}")
     return job_id
@@ -51,9 +54,9 @@ def master(config):
 
     # load run specifications
     di = utils.tools.load_yaml(config)
-    start_date, end_date, detect_hours, track_hours = di['start_date'], di['end_date'], di['detect_segment_hours'], di['track_hours']
-    version_details = utils.tools.version_str(di)
-    shutil.copy2(config, Path(di['data_directory']) / version_details)
+    start_date, end_date, detect_hours, track_hours = di['start_date'], di['end_date'], di['detect_segment_hours'], str(di['track_hours'])
+    version_name = utils.tools.version_str(di)
+    shutil.copy2(config, Path(di['data_directory']) / version_name)
 
     submission_files = Path('/home/b/b382635/s/global3d_track/global3d_track/submission_files')
         
