@@ -69,7 +69,7 @@ class ShareLabels:
 
         return result.where(result>0)
 
-    def tobac_like(self, current: xr.DataArray, update: xr.DataArray, table_path: str, current_col: str, update_col: str):
+    def tobac_like(self, current: xr.DataArray, update: xr.DataArray, table_path: str, current_col: str, update_col: str, new_tobac_table=True):
         '''
         Share the coincident labels of 'update' to 'current' but with record keeping. Returns the resulting dataarray and saves a new pandas table at the same directory as 'table_path' with the changes recorded.
         current: integer dataarray
@@ -77,6 +77,7 @@ class ShareLabels:
         table_path: path to the tobac-like feature table
         current_col: column name in the tobac-like feature table corresponding to the current feature labels in 'current'
         update_col: name to call the new column that will record the mappings applied by this function
+        new_tobac_table: whether to save a new table instead of adding a column to the existing one
         '''
         
         # 1. find mappings, or load them from the checkpoint
@@ -101,8 +102,11 @@ class ShareLabels:
         mapping = dict(zip(index, new)) # as dict
         # apply
         df[update_col] = df[current_col].map(mapping).fillna(0) # record as new column
-        # save the table with the suffix '_{update_col}'
-        outpath = table_path.with_name(f"{table_path.stem}_{update_col}{table_path.suffix}")
+        # save the table
+        if new_tobac_table:
+            outpath = table_path.with_name(f"{table_path.stem}_{update_col}{table_path.suffix}")
+        else:
+            outpath = table_path
         df.to_hdf(outpath, 'table')
         logging.info(f"{datetime.now()} saved table to {outpath}.")
 
