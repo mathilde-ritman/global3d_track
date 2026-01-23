@@ -44,6 +44,7 @@ def track_object(di, obj_name, start_date, end_date, version_name):
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config'])
     name = obj_di['name']
     final_tracks_path = Path(data_dir / f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}_{name}_tracks.nc")
+    table_path = data_dir + f'/{name}/features.h5'
 
     # - what tracking are we doing?
 
@@ -127,8 +128,7 @@ def track_object(di, obj_name, start_date, end_date, version_name):
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        record_mappings = dict(path=data_dir, current_col='cell', update_col='eroded_contiguity')
-        eroded_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, erode_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
+        eroded_tracks = methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name=d).tobac_like(track_mask.cell, erode_track, table_path, current_col='cell', update_col='tracks', new_tobac_table=False)
         track_mask['tracks'] = eroded_tracks
 
         checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int32), f'{d}erode-resulting_tracks')
@@ -150,11 +150,9 @@ def track_object(di, obj_name, start_date, end_date, version_name):
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-
-        record_mappings = dict(path=data_dir, current_col='cell', update_col='contiguity')
-        connect_tracks = methods.ShareLabels().share_labels_parallel(track_mask.cell, connect_track, nan_val=1e10, checkpoint=slabs_checkpoint, checkpoint_name=d, n_k=n_k, record=record_mappings)
-        connect_tracks = methods.misc.force_consecutive_labels(connect_tracks)
-        track_mask['tracks'] = connect_tracks
+        methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name=d).tobac_like(track_mask.cell, connect_track, table_path, current_col='cell', update_col='contiguity', new_tobac_table=False)
+        connect_track = methods.misc.force_consecutive_labels(connect_track, table_path, current_col='contiguity', update_col='tracks', new_tobac_table=False)
+        track_mask['tracks'] = connect_track
 
         checkpoint.checkpoint_dataset(connect_track.fillna(NAN).astype(np.int32), f'{d}connect-resulting_tracks')
 
@@ -241,8 +239,7 @@ def main(yaml_file, start_date, end_date):
 
         # now get the overall system
         logging.info(f"{datetime.now()} share labels...")
-        record_mappings = dict(path=tracks_record_path, current_col=order[1], update_col=order[0])
-        result = methods.ShareLabels().share_labels_parallel(get_da(mask_get), get_da(mask_give), nan_val=1e10, n_k=n_k, checkpoint=slabs_checkpoint, checkpoint_name='final/', record=record_mappings)
+        result = methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name='final/').tobac_like(get_da(mask_get), get_da(mask_give), tracks_record_path, current_col=order[1], update_col=order[0], new_tobac_table=False)
         overall_system = methods.misc.union_all([result, get_da(mask_give)])
 
         # collect results
