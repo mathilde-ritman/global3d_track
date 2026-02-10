@@ -14,8 +14,8 @@ params_features:
   sigma_threshold: 1 # standard deviation for intial filtering step used to smooth the feature data
   target: "maximum"
   min_distance: 27750 # minimum distance between detected features (m)
-  threshold: [0.000005, 0.00005] # kg/kg
-  # threshold: [0.00005, 0.0005] # kg/kg - restrictive threshold experiment
+  # threshold: [0.00001, 0.0001, 0.001, 0.01] # kg/kg -- was [0.000005, 0.00005] in Ritman 2026
+  threshold: [0.000005, 0.00005] # kg/kg - in Ritman 2026
   n_erosion_threshold: 0 # number of pixels by which to erode the identified features
   vertical_coord: 'height'
   dz: 300 # (meters) assumes constant vertical spacing
@@ -23,7 +23,7 @@ params_features:
 
 params_segmentation:
   method: 'watershed'
-  threshold: 0.000005 # kg/kg mixing ratio
+  threshold: 0.00001 # kg/kg --- was 0.000005
   # threshold: 0.00005 # kg/kg mixing ratio - restrictive threshold experiment
   target: "maximum"
   seed_3D_flag: 'box'
@@ -33,8 +33,8 @@ params_segmentation:
 params_linking:
   method_linking: 'predict'
   d_max: 100000 # set max search range (m)
-  adaptive_stop: 0.2
-  adaptive_step: 0.95
+  adaptive_stop: 0.2 # was 0.2 in Ritman et al., 2026
+  adaptive_step: 0.95 # was 0.95
   memory: 0
   stubs: 3 # minimum number of timesteps of a tracked cell to be reported
   vertical_coord: null # must be set as None when using 'dz'
@@ -42,6 +42,3 @@ params_linking:
   # PBC_flag: # whether to use periodic boundaries, and if so in which directions
   # min_h2=0, # to use for boundaries if using PBC flag for periodic boundary across longitude
   # max_h2=3600,
-
-savedir: "/work/bb1153/b382635/tobac_tracking"
-plotdir: "/work/bb1153/b382635/plots/icon/tobac_tracking"

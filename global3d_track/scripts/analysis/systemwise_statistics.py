@@ -42,15 +42,20 @@ def process_system(di, data_dir, save_dir, sidx, NAN=-999.99):
     log_memory(f"{sidx}: before loading data")
     mask = utils.data_tools.grab_system(sidx, data_dir)
     mask = mask.where(mask>0)
-    # - check system size
-    ssize = mask.system.count().values
-    logging.warning(f"{datetime.now()} System {sidx} has size {ssize} points")
+    # - check system size, should not ever user pecified max area (n pixels) or 50% of domain
+    ssize = mask.system.sum(('lat','lon')).max(('time','level_full')).values
+    domain_size = 300*400 ####! hardcoded !####
+    logging.warning(f"{datetime.now()} System {sidx} has maximum size {ssize} points, covering {ssize/domain_size*100}% of the domain")
     if ssize > di.get('max_system_size', np.inf):
-        logging.warning(f"System {sidx} is very large, skipping for now")
+        logging.warning(f"System {sidx} is too large, skipping for now")
         del mask
         gc.collect()
-        # exit the function
-        return
+        return # exit the function
+    if ssize > di.get('max_system_domain', 1) * domain_size:
+        logging.warning(f"System {sidx} covers {ssize/domain_size*100}% of domain, skipping for now")
+        del mask
+        gc.collect()
+        return # exit
     variables = ['cli', 'clw', 'dzghalf', 'hus', 'pfull', 'pr', 'qg', 'qr', 'qs', 'rlut', 'ta', 'ts', 'ua', 'va', 'wa_phy']
     data = utils.data_tools.grab_system_data(mask, variables)
     log_memory(f"{sidx}: after loading data")
@@ -131,26 +136,9 @@ def process_all(yaml_file):
     result_dir = Path(di['results_directory']) / version
     NAN = -999.99
 
-    # - all systems
-    if di['system_wise_version'] == "cross":
-        # - only process 1 core valid systems
-        df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/EGU2025/system_valid_for_analysis.csv', index_col='system_id')
-        valid_systems = df.index[df.iloc[:,0].values]
-    elif di['system_wise_version'] == "grl_no_development":
-        # add those that avoid the domain boundary and don't have a developing phase of at least 30 mins
-        df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")
-        valid_systems = df.index[~df["hits_boundary"]] 
-        df_restricted = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/canvil_paper/remakes_Aug2025/results_data/system_validity.csv', index_col='system_id')
-        # get systems in all bot not in restricted
-        valid_systems = [x for x in valid_systems if x not in df_restricted.index[df_restricted["valid"]]]
-    elif di['system_wise_version'] == "grl":
-        # - only process those that avoid donmain boundary and have developing phase of at least 30 mins
-        df = pd.read_csv('/work/bb1153/b382635/plots/tracked_results_2025/canvil_paper/remakes_Aug2025/results_data/system_validity.csv', index_col='system_id')
-        valid_systems = df.index[df["valid"]]
-    else:
-        # - only process those that avoid the domain boundary
-        df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")
-        valid_systems = df.index[~df["hits_boundary"]] 
+    # - only process those that avoid the domain boundary
+    df = pd.read_csv(data_dir / "data_filtering_stats/system_hits_boundary.csv", index_col="system_id")
+    valid_systems = df.index[~df["hits_boundary"]] 
     if not isinstance(valid_systems, list):
         valid_systems = valid_systems.tolist()
     logging.info(f"{datetime.now()} found {len(valid_systems)} valid systems to process.")

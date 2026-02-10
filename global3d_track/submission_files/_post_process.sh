@@ -21,11 +21,11 @@ module load python3
 source /home/b/b382635/.bashrc
 source activate hackathon_env
 
-yaml=$1
+yaml_file=$1
 start_date=$2
 end_date=$3
 
-echo "submitted with arguments: " $yaml $start_date $end_date
+echo "submitted with arguments: " $yaml_file $start_date $end_date
 
 cd /home/b/b382635/s/global3d_track
-python -m global3d_track.scripts.track.master $yaml -s $start_date -e $end_date
+python -m global3d_track.scripts.track.post_process --yaml $yaml_file -s $start_date -e $end_date

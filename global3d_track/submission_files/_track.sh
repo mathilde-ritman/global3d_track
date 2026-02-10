@@ -11,9 +11,10 @@
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/master/track.o%j
 
 # specifications
-yaml=$1
+yaml_file=$1
 start_date=$2
 end_date=$3
+hours=$4
 
 # Convert the dates to seconds since the Unix epoch
 start_date_sec=$(date -d "$start_date" +%s)

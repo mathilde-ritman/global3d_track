@@ -127,8 +127,6 @@ def iterate_groups_define(di, files, check_dir, data_dir):
             )
 
             # collect results for anvil base heights
-            logging.info(f"{results[0][0]=}")
-            logging.info(f"{mask_i.time.size=}")
             abh_df_i = make_df([result[0] for result in results], group_keys, mask_i.time.values)
             abh_df = pd.concat((abh_df, abh_df_i), axis=1)
 

@@ -15,30 +15,10 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message
 
 def define_objects(ds, data):
 
-    if 'core' in ds.data_vars:
-        ds = ds.rename({'core':'updraft'})
     if 'anvil' in ds.data_vars:
         ds = ds.rename({'anvil':'ice'})
 
-    ds = define_core(ds, data)
     ds = define_anvil(ds, data)
-    return ds
-
-def define_core(ds, data):
-    tobac_data = data
-    config = '/home/b/b382635/s/global_DCC_tracking/submission_files/core_config.yaml'
-    # track
-    track_module = multivariate_tobac.Track(tobac_data.wa_phy, tobac_data.wa_phy, config, overwrite=True)
-    cores, df = track_module.perform(track=True, merge=True, save=False)
-    # get max vertical velocities
-    df = get_statistic(df, cores.feature, tobac_data.wa_phy)
-    # require reaches 1 m/s at some point
-    r = df[['merged','max_w']].groupby('merged').max()
-    cores_above_thresh = r[r>=1].dropna().index
-    cores = cores.where(cores.merged.isin(cores_above_thresh)).where(ds.system>0)
-    # collect
-    ds['core_features'] = cores.merged
-    ds['core'] = ds.system.where(ds.core_features>0)
     return ds
 
 def define_anvil(ds, data, core_name='core'):
@@ -64,13 +44,6 @@ def define_anvil(ds, data, core_name='core'):
 
 
 #### ------------------------ helpers ------------------------ ####
-
-
-def get_statistic(df, mask, field):
-    masked_field = field.where(mask>0)
-    group = masked_field.groupby(mask).max()
-    df.loc[:,'max_w'] = group.sel(feature=slice(1,None)).values
-    return df
 
 def derivative(da, smooth=True, interp=False, verbose=False):
     if da.level_full[0] == 90:

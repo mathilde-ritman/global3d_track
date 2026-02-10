@@ -1,2 +1,2 @@
 from .scripts import (analysis, track)
-from .scripts.src import (methods, utils)
+from .scripts.src import (methods, utils, statistics)
