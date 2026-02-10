@@ -1,5 +1,6 @@
-#### Collection of 3d cloud and object tracking extensions to tobac
+#### Module to identify, track and analyse deep convective clouds in 3D space
 
-Built for 3d, global-scale use in the high temporal resolution ICON cycle 4a model output
+Built using ICON NextGEMs cycle 4a model output.
 
 Contact: mathilde.ritman@physics.ox.ac.uk
+
