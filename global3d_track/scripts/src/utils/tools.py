@@ -85,30 +85,52 @@ def load_yaml(yaml_file):
         di = yaml.safe_load(f)
     return di
 
-def version_name(yaml):
+def version_name(yaml, use_tobac_version=False):
     datestr = datetime.strptime(yaml['start_date'], "%Y-%m-%d %H:%M:%S").strftime('%Y%m%d')
-    return pathlib.Path(yaml['version_name'], yaml['region'], datestr)
+    if not use_tobac_version:
+        name = pathlib.Path(yaml['version_name'], yaml['region'], datestr)
+    else:
+        name = pathlib.Path(yaml['tobac_version'], yaml['region'], datestr)
+    return name
 
-def collect_tobac_features(sdir, feature_type):
-    ''' Collect features from multiple files '''
+def collect_tobac_features(sdir, feature_type, remove=False):
+    ''' Collect features from multiple files '''    
+
+    # filesystem
+    fdir = pathlib.Path(sdir, feature_type)
+    all_features = sorted(fdir.glob('*/features.h5'))
+    all_masks = sorted(fdir.glob('*/segmented_mask.nc'))
+
+    # check whether this is needed (are there any files to collect?)
+    if len(all_features) == 0 or len(all_masks) == 0:
+        return
+
     # collect table of all features in directory
-    sdir = str(sdir)
-    fframes = sorted(glob.glob(sdir + f'/{feature_type}/*/features.h5'))
     li = []
-    for f in fframes:
+    for f in all_features:
         li.append(pd.read_hdf(f, 'table'))
     df = tobac.utils.general.combine_feature_dataframes(li)
-    df.to_hdf(sdir + f'/{feature_type}/features.h5', 'table')
-    # collect corresponding masks in directory
-    fmasks = sorted(glob.glob(sdir + f'/{feature_type}/*/segmented_mask.nc'))
-    m = xr.open_dataset(fmasks[0])
-    for i in range(len(fmasks)-1):
-        highest_label = m.feature.max()
-        next_m = xr.open_dataset(fmasks[1+i])
+    df.to_hdf(fdir / 'features.h5', 'table')
+
+    # collect all masks as one
+    curr_m = xr.open_dataset(all_masks[0])
+    for i in range(len(all_masks)-1):
+        highest_label = curr_m.feature.max()
+        next_m = xr.open_dataset(all_masks[1+i])
         next_m['feature'] = (next_m.feature + highest_label).where(next_m.feature > 0, 0)
-        m = xr.concat((m, next_m), dim='time')
-    m.to_netcdf(sdir + f'/{feature_type}/segmented_mask.nc')
-    m.close()
+        curr_m = xr.concat((curr_m, next_m), dim='time')
+    curr_m.to_netcdf(fdir / 'segmented_mask.nc')
+    curr_m.close()
+
+    # remove individual files if desired
+    if remove:
+        for subdir in fdir.iterdir():
+            if subdir.is_dir():
+                for f in subdir.iterdir():
+                    if f.is_file():
+                        f.unlink()
+                subdir.rmdir()
+
 
 def make_directories(dirs):
     ''' Make directories if they do not exist '''

@@ -80,6 +80,7 @@ class ShareLabels:
         update_col: name to call the new column that will record the mappings applied by this function
         new_tobac_table: whether to save a new table instead of adding a column to the existing one
         '''
+        logging.info(f"{datetime.now()} table_path={table_path}")
         
         # 1. find mappings, or load them from the checkpoint
         checkdir = f'{self.checkpoint_name}label_mappings/'
@@ -111,6 +112,7 @@ class ShareLabels:
             outpath = table_path.with_name(f"{table_path.stem}_{update_col}{table_path.suffix}")
         else:
             outpath = table_path
+        logging.info(f"{datetime.now()} saving table to {outpath}...")
         df.to_hdf(outpath, 'table')
         logging.info(f"{datetime.now()} saved table to {outpath}.")
 

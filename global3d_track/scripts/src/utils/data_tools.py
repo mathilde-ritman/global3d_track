@@ -48,9 +48,13 @@ def add_height_data(dataset, height_values):
 
 def load_tobac_data(variables, region, start_date, end_date, model_version='4008a'):
     # load data
-    cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
     if model_version=='4008a':
+        cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
         dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+    elif model_version=='d3hp003feb':
+        cat = intake.open_catalog('https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml')['online']
+        dataset = cat.icon_d3hp003feb(time="PT15M", zoom=11).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+        dataset = dataset.rename({'wa':'wa_phy',})
     else:
         raise ValueError("Model version not implemented")
     # process data

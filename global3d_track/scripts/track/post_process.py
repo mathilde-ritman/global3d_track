@@ -131,7 +131,7 @@ def main(yaml_file, start_date, end_date):
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("yaml", help="path to configuration file", type=str)
+    parser.add_argument("--yaml", help="path to configuration file", type=str)
     parser.add_argument("-s", help="date on which to start process", type=str)
     parser.add_argument("-e", help="date on which to end process", type=str)
     args = parser.parse_args()

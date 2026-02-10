@@ -31,6 +31,9 @@ class Helpers:
         # update dict with passed params
         if option_mods:
             di = {k: self._update_di(di[k], option_mods[k]) if k in option_mods.keys() else di[k] for k in di.keys()}
+            for k in option_mods.keys():
+                if k not in di.keys():
+                    di[k] = option_mods[k]
         return di
     
     def _load_yaml(self, file):
@@ -104,6 +107,8 @@ class Track(Connect, Helpers):
 
         dxy, dt = di['grid_spacing'], di['time_spacing']
 
+        logging.info(f"{self.savedir_v=}")
+
         # -- load or compute features
         if Path(self.savedir_v, 'features.h5').is_file() and not self.overwrite:
             features = pd.read_hdf(Path(self.savedir_v, 'features.h5'), 'table')
@@ -137,6 +142,7 @@ class Track(Connect, Helpers):
         # -- load or compute tracking
         if Path(self.savedir_v, 'tracked_features.h5').is_file() and not self.overwrite_tracks:
             tracks = pd.read_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
+            mask_dataset = xr.open_mfdataset(Path(self.savedir_v, 'tracked_mask.nc'))
 
         elif track:
             tracks = tobac.linking_trackpy(self.features, None, dt=dt, dxy=dxy, **di['params_linking'])
