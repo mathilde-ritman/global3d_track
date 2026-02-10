@@ -111,6 +111,10 @@ def master(config):
     # job_id = submit_job(submission_files / '_post_process.sh', (config, start_date, end_date))
     # wait_for_job(job_id)
 
+
+    logging.info('lets test this out in a bit more detail...')
+    # testing again.
+
 #### --------------------------------- ####
 
 if __name__ == "__main__":

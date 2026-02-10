@@ -1,0 +1,32 @@
+# config to perform customised tracking
+
+
+overwrite: 1
+restart_checkpoints: 1
+
+data_directory: /work/bb1153/b382635/data/final_tracks
+results_directory: /work/bb1153/b382635/data/track_statistics
+# checkpoint_directory: /scratch/b/b382635/analysis_checkpoints
+checkpoint_directory: /work/bb1153/b382635/data/track_statistics
+
+region: anatomy_example_large
+version: updraft_ice_only
+
+start_date: '2021-07-01 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+end_date: '2021-07-02 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+
+# which sets of statistics would you like to calculate
+results:
+  grl_bucket:
+    name: grl_bucket
+    shortname: grl
+    function: GRLBucket
+    parameters: False # nothing to pass
+
+batch_size: 24 # number of time steps to process at once
+
+# for system-wise analysis
+batch_system: 4 # number of systems to process at once
+system_wise_version: 'grl' # sets results directory and how to filter valid systems
+max_system_size: 300000 # (pixels) maximum size of a system to process
+start_idx: 0 # (cloud number) where to start from
