@@ -30,7 +30,7 @@ def detect_segment_object(di, obj_name, start_date, end_date):
     # - run and checkpoint management
 
     overwrite = di['overwrite']
-    data_dir = Path(di['data_directory']) / utils.tools.version_name(di, use_tobac_version=True)
+    data_dir = Path(di['data_directory']) / utils.tools.version_name(di, use_tobac_version=True, start_date=start_date)
     data_dir.mkdir(parents=True, exist_ok=True)
     obj_di = di['objects'][obj_name] # choices for the variable being tracked
     version_suffix = f"{obj_di['name']}/{start_date.strftime('T%H%M')}_{end_date.strftime('T%H%M')}"

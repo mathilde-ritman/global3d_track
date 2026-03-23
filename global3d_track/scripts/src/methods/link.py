@@ -47,9 +47,9 @@ def link_chunks(first_mask, next_mask, variable='system'):
 
     ''' Ensure contiguity of mask labels between adjacent time chunks. '''
 
-    NAN = -9
-    first_mask = first_mask.where(first_mask != NAN)
-    next_mask = next_mask.where(next_mask != NAN)
+    ZERO = 0
+    first_mask = first_mask.where(first_mask > ZERO)
+    next_mask = next_mask.where(next_mask > ZERO)
 
     # 1 - shift all labels in next file to ensure no repition
     # push new labels up using addition
@@ -71,8 +71,11 @@ def link_chunks(first_mask, next_mask, variable='system'):
     # create dict of label replacements
     cond = join.connected
     k_vals = np.unique(cond.values)
-    bmatches, amatches = collect_matches(k_vals[~np.isnan(k_vals)], cond, before, after)
+    k_vals[~np.isnan(k_vals)]
+    logging.info(f"{datetime.now()} found {k_vals.size} unique labels in joined mask")
+    bmatches, amatches = collect_matches(k_vals, cond, before, after)
     bmatches, amatches = update_matches(bmatches, amatches)
+    logging.info(f"{datetime.now()} found {bmatches.size} matches before and {amatches.size} matches after")
     # replace labels of first_mask and next_mask with paired labels from first_mask
     next_mask[variable+'_update'] = next_mask[variable+'_shift'].copy()
     first_mask[variable+'_update'] = first_mask[variable].copy()
@@ -80,14 +83,16 @@ def link_chunks(first_mask, next_mask, variable='system'):
         # each k is a feature label, shared (or non shared)
         b_all = bmatches[i, :][~np.isnan(bmatches[i, :])] # coincident labels from first mask
         a_all = amatches[i, :][~np.isnan(amatches[i, :])] # coincident labels from next mask
-        b = np.nanmin(b_all) # value from first to use as replacement
+        logging.info(f"{datetime.now()} processing label number {i}, value {k}... found {b_all} and {a_all}")
         if np.any(a_all):
             if np.any(b_all):
                 # if feature exists in both first and next mask, replace next with value from first
+                b = np.nanmin(b_all) # value from first to use as replacement
                 next_mask[variable+'_update'] = next_mask[variable+'_update'].where(~next_mask[variable+'_shift'].isin(a_all), b)
             # otherwise, no change
         if b_all.size > 1:
             # if multiple features within the first mask, replace with chosen (minimum) value
+            b = np.nanmin(b_all) # value from first to use as replacement
             first_mask[variable+'_update'] = first_mask[variable+'_update'].where(~first_mask[variable+'_update'].isin(b_all), b)
         # otherwise, no change
             
@@ -148,3 +153,4 @@ def link_files(files, vars_to_update, fname_suffix='_linked'):
         tools.compress_and_save(previous_mask.fillna(NAN).astype(np.int64), current_file.replace('.nc',f'{fname_suffix}.nc'))
         current_file = next_file
     tools.compress_and_save(current_mask.fillna(NAN).astype(np.int64), next_file.replace('.nc',f'{fname_suffix}.nc'))
+

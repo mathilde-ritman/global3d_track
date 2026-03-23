@@ -16,6 +16,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 import time
+import shutil
 import sys
 from ..src import utils, methods
 Checkpoint = utils.checkpoint.Checkpoint
@@ -31,22 +32,25 @@ Checkpointing is implemented following key steps. Data checkpointed are saved to
 
 def track_object(di, obj_name, start_date, end_date):
 
-    NAN = -9
-
     # - run and checkpoint management
 
-    overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
+    overwrite, overwrite_tobac, restart_checkpoints = di['overwrite'], di.get('overwrite_tobac', di['overwrite']), di['restart_checkpoints']
 
     # directories
-    tobac_dir = Path(di['data_directory']) / utils.tools.version_name(di, use_tobac_version=True)
-    data_dir = Path(di['data_directory']) / utils.tools.version_name(di)
-    check_dir = Path(di['checkpoint_directory']) / utils.tools.version_name(di)
-
+    tobac_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date, use_tobac_version=True))
+    data_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date))
+    check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, start_date=start_date))
+    
     # specifications
-    checkpoint = Checkpoint(check_dir) # checkpoints
     obj_di = di['objects'][obj_name] # choices for variable being tracked
     name = obj_di['name'] # variable name
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config']) # tobac parameters
+
+    # checkpoints
+    checkpoint = Checkpoint(check_dir, overwrite=restart_checkpoints) # checkpoints
+    n = f'{name}_tracking/' # subfolder for checkpointing current object
+    (check_dir/n).mkdir(parents=True, exist_ok=True) # make subdirectory for current object
+    inner_checkpoint = dict(checkpoint=(checkpoint if di.get('inner_checkpoint', False) else None), checkpoint_name=n, check_n=di.get('topography_check_n', None))
 
     # output paths
     datetime_range = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
@@ -64,20 +68,13 @@ def track_object(di, obj_name, start_date, end_date):
         skip_contiguity = False # perform some connected object tracking please
     elif not obj_di['methods'].get('tobac', False):
         warnings.warn('Tracking without using tobac first has not been implemented.')
-        logging.warning('Tracking without using tobac first has not been implemented. Skipping object.')
-        return
 
     # - done already?!
         
     if final_tracks_path.exists() and not overwrite:
         logging.info(f"{datetime.now()} loaded {name} tracks from {final_tracks_path}")
         track_mask = xr.open_dataset(final_tracks_path)
-        return track_mask.where(track_mask > 0)
-    
-    d = f'{name}_tracking/' # subfolder for checkpointing current object
-    if checkpoint.checkpoint_reached(f'{d}tracks') and not (overwrite and restart_checkpoints):
-        track_mask = checkpoint.load_dataset(f'{d}tracks', nan_value=NAN)
-        return track_mask.where(track_mask > 0)
+        return track_mask
 
     # - details
 
@@ -88,99 +85,105 @@ def track_object(di, obj_name, start_date, end_date):
     if region == 'global':
         PBC_flag = "hdim_2"
     modify_parameters = dict(savedir=tobac_dir, PBC_flag=PBC_flag)
-    slabs_checkpoint = checkpoint if di['multivariate']['checkpoint'] else None
 
     # - processing
+
+    if tobac_table_path.exists() and not overwrite_tobac:
+        tobac_tracks_path = Path(tobac_dir) / f"{name}/tracked_mask.nc"
+        logging.info(f"{datetime.now()} loading {name} tobac tracks from {tobac_tracks_path}...")
+        track_mask = xr.open_dataset(tobac_tracks_path).sel(time=slice(start_date, end_date)) # tobac tracks the full day, but the input trange may be smaller
     
-    if checkpoint.checkpoint_reached(f'{d}tobac_tracks'):
-        track_mask = checkpoint.load_dataset(f'{d}tobac_tracks', nan_value=NAN)
+    elif checkpoint.checkpoint_reached(f'{n}tobac_tracks'):
+        track_mask = checkpoint.load_dataset(f'{n}tobac_tracks').sel(time=slice(start_date, end_date))
 
     else:
         # prep
         logging.info(f"{datetime.now()} tobac tracking...")
         tic = time.perf_counter()
-        tobac_methods = {'track': True, 'save': True, 'detect': False, 'segment': False}
-        utils.tools.collect_tobac_features(tobac_dir, name, remove=True) # collects all detection and segmentation results within the time range being tracked, and removes the individual files
+        tobac_methods = {'detect':True, 'segment':True, 'track': True, 'save': True}
+        utils.tools.collect_tobac_features(tobac_dir, name, remove=False) # collects all detection and segmentation results within the time range being tracked, and removes the individual files
 
         # track using tobac
-        module = methods.tobac_wrapper.Track(None, None, tobac_config, overwrite_tracks=overwrite, track_params=modify_parameters)
+        module = methods.tobac_wrapper.Track(None, None, tobac_config, overwrite_tracks=overwrite_tobac, track_params=modify_parameters)
         track_mask, _ = module.perform(**tobac_methods)
-        track_mask = track_mask.where(track_mask > 0)
-        checkpoint.checkpoint_dataset(track_mask.fillna(NAN).astype(np.int32), f'{d}tobac_tracks')
+        checkpoint.checkpoint_dataset(track_mask, f'{n}tobac_tracks')
 
         # copy tobac tracking record to the main tracking output directory, so that the next steps are recorded
-        os.system(f'scp {tobac_table_path} {table_path}')
+        shutil.copy2(tobac_table_path, table_path)
 
         # remove files
-        if os.path.isfile(f'{tobac_dir}/{name}/features.h5'):
-            os.system(f'rm {tobac_dir}/{name}/features.h5')
-            os.system(f'rm {tobac_dir}/{name}/segmented_mask.nc')
+        Path(tobac_dir, name, 'features.h5').unlink(missing_ok=True)
+        Path(tobac_dir, name, 'segmented_mask.nc').unlink(missing_ok=True)
 
         toc = time.perf_counter()
         logging.info(f"{datetime.now()} done with tobac tracking, time taken: {toc - tic:0.1f} seconds")
 
     # chunk input
-    track_mask = track_mask.chunk({"time": 1, "lat": 128, "lon": 128})
+    track_mask = track_mask.chunk(utils.tools.get_chunks(track_mask))
 
     if skip_erode:
         pass
 
-    elif checkpoint.checkpoint_reached(f'{d}erode-resulting_tracks'):
-        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}erode-resulting_tracks', nan_value=NAN)
+    elif checkpoint.checkpoint_reached(f'{n}erode-resulting_tracks'):
+        track_mask['tracks'] = checkpoint.load_dataarray(f'{n}erode-resulting_tracks')
 
     else:
         tic = time.perf_counter()
-        if checkpoint.checkpoint_reached(f'{d}erode-erode_mask'):
-            erode_mask = checkpoint.load_dataarray(f'{d}erode-erode_mask', nan_value=NAN)
+        flag = 0
+        if checkpoint.checkpoint_reached(f'{n}erode-erode_track'):
+            erode_track = checkpoint.load_dataarray(f'{n}erode-erode_track')
+
+        elif checkpoint.checkpoint_reached(f'{n}erode-erode_mask'):
+            erode_mask = checkpoint.load_dataarray(f'{n}erode-erode_mask')
+            flag = 1
+
         else:
             # perform erosion of mask
             logging.info(f"{datetime.now()} eroding mask...")
             erody_by = obj_di['methods']['erode']
-            erode_mask = methods.Erode().weighted_erode(track_mask.cell.fillna(0), value=erody_by)
-            checkpoint.checkpoint_dataset(erode_mask.fillna(NAN).astype(np.int32), f'{d}erode-erode_mask')
+            erode_mask = methods.Erode(**inner_checkpoint).weighted_erode(track_mask.cell, value=erody_by)
+            checkpoint.checkpoint_dataset(erode_mask, f'{n}erode-erode_mask')
+            flag = 1
 
-        if checkpoint.checkpoint_reached(f'{d}erode-erode_track'):
-            erode_track = checkpoint.load_dataarray(f'{d}erode-erode_track', nan_value=NAN)
-        else:
+        if flag:
             # track eroded mask
             logging.info(f"{datetime.now()} tracking eroded mask...")
             erode_track = methods.misc.track_connected_components(erode_mask, PBC_flag=PBC_flag)
-            erode_track = erode_track.where(erode_track > 0)
-            checkpoint.checkpoint_dataset(erode_track.fillna(NAN).astype(np.int32), f'{d}erode-erode_track')
+            checkpoint.checkpoint_dataset(erode_track, f'{n}erode-erode_track')
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        eroded_tracks = methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name=d).tobac_like(track_mask.cell, erode_track, table_path, current_col='cell', update_col='econtiguity', new_tobac_table=False)
+        eroded_tracks = methods.ShareLabels(track_mask.cell, erode_track, 'cell', 'econtiguity').tobac_like(table_path)
         eroded_tracks = methods.misc.force_consecutive_labels(eroded_tracks, table_path, current_col='econtiguity', update_col='tracks', new_tobac_table=False)
         track_mask['tracks'] = eroded_tracks
 
-        checkpoint.checkpoint_dataset(eroded_tracks.fillna(NAN).astype(np.int32), f'{d}erode-resulting_tracks')
+        # checkpoint.checkpoint_dataset(eroded_tracks, f'{n}erode-resulting_tracks')
         toc = time.perf_counter()
         logging.info(f"{datetime.now()} done with erosion-contiguity tracking, time taken: {toc - tic:0.1f} seconds")
 
     if skip_contiguity:
         pass
 
-    elif checkpoint.checkpoint_reached(f'{d}connect-resulting_tracks'):
-        track_mask['tracks'] = checkpoint.load_dataarray(f'{d}connect-resulting_tracks', nan_value=NAN)
+    elif checkpoint.checkpoint_reached(f'{n}connect-resulting_tracks'):
+        track_mask['tracks'] = checkpoint.load_dataarray(f'{n}connect-resulting_tracks')
 
     else:
         tic = time.perf_counter()
-        if checkpoint.checkpoint_reached(f'{d}connect-connect_track'):
-            connect_track = checkpoint.load_dataarray(f'{d}connect-connect_track', nan_value=NAN)
+        if checkpoint.checkpoint_reached(f'{n}connect-connect_track'):
+            connect_track = checkpoint.load_dataarray(f'{n}connect-connect_track')
         else:
             # track using contiguity
             logging.info(f"{datetime.now()} contiguity tracking...")
             connect_track = methods.misc.track_connected_components(track_mask.feature)
-            checkpoint.checkpoint_dataset(connect_track.fillna(NAN).astype(np.int32), f'{d}connect-connect_track')
+            checkpoint.checkpoint_dataset(connect_track, f'{n}connect-connect_track')
         
         # share result to main mask
         logging.info(f"{datetime.now()} share labels...")
-        connected_tracks = methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name=d).tobac_like(track_mask.cell, connect_track, table_path, current_col='cell', update_col='contiguity', new_tobac_table=False)
+        connected_tracks = methods.ShareLabels(track_mask.cell, connect_track, 'cell', 'contiguity').tobac_like(table_path)
         connected_tracks = methods.misc.force_consecutive_labels(connected_tracks, table_path, current_col='contiguity', update_col='tracks', new_tobac_table=False)
         track_mask['tracks'] = connected_tracks
 
-        checkpoint.checkpoint_dataset(connected_tracks.fillna(NAN).astype(np.int32), f'{d}connect-resulting_tracks')
+        # checkpoint.checkpoint_dataset(connected_tracks, f'{n}connect-resulting_tracks')
         toc = time.perf_counter()
         logging.info(f"{datetime.now()} done with contiguity tracking, time taken: {toc - tic:0.1f} seconds")
 
@@ -188,11 +191,9 @@ def track_object(di, obj_name, start_date, end_date):
     logging.info(f"{datetime.now()} saving...")
     if not 'tracks' in track_mask.data_vars:
         track_mask['tracks'] = track_mask.cell
-    checkpoint.checkpoint_dataset(track_mask.fillna(NAN).astype(np.int32), f'{d}tracks')
-    final_loc = checkpoint.record[f'{d}tracks']
-    result = os.system(f'scp {final_loc} {final_tracks_path}')
-    if result != 0:
-        logging.error("SCP command failed.")
+    track_mask = track_mask.drop_vars(['feature', 'cell'])
+    utils.tools.save_xarray(track_mask, final_tracks_path)
+    shutil.copy2(final_tracks_path, check_dir / f'{n}final_tracks.nc') # copy result to checkpoint directory
 
     logging.info(f"{datetime.now()} Saved {name} result to {final_tracks_path}.")
 
@@ -201,22 +202,20 @@ def track_object(di, obj_name, start_date, end_date):
 
 def perform(yaml_file, start_date, end_date):
 
-    NAN = -9
-
     # - load yaml and set up
 
     di = utils.tools.load_yaml(yaml_file)
     overwrite, restart_checkpoints = di['overwrite'], di['restart_checkpoints']
-    objects_to_track = di['objects'].keys()
+    variables_to_track = di['objects'].keys()
 
     # directories
-    version_name = utils.tools.version_name(di)
+    version_name = utils.tools.version_name(di, start_date=start_date)
     data_dir = Path(di['data_directory'], version_name)
     check_dir = Path(di['checkpoint_directory'], version_name)
     utils.tools.make_directories((data_dir, check_dir))
 
     # checkpoints
-    checkpoint = Checkpoint(check_dir, overwrite = (overwrite and restart_checkpoints))
+    checkpoint = Checkpoint(check_dir, overwrite=restart_checkpoints) # define class
 
     # output paths
     datetime_range = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
@@ -229,82 +228,70 @@ def perform(yaml_file, start_date, end_date):
         logging.info(f"{datetime.now()} system tracks exist already at {final_tracks_path}")
         sys.exit()
 
-    n = 'system/tracks' # path for checkpointing
-    if checkpoint.checkpoint_reached(n) and not restart_checkpoints:
-        loc = checkpoint.record[n]
-        result = os.system(f'scp {loc} {final_tracks_path}')
-        logging.info(f"System tracks already exist at {loc}. Copied to {final_tracks_path}. sys.exiting.")
-        sys.exit()
-
     #  - track each object as per yaml
 
-    tracked_mask = {}
-    for obj in objects_to_track:
+    tracking_results = {}
+    for variable in variables_to_track:
         task_start = datetime.now()
-        logging.info(f"{task_start} procesing object {obj}")
-        tracked_mask[obj] = track_object(di, obj, start_date, end_date).astype(np.int32)
-        logging.info(f"{datetime.now()} done with {obj}. Took {datetime.now() - task_start}.")
+        logging.info(f"{task_start} procesing object {variable}")
+        check_dir.mkdir(parents=True, exist_ok=True)
+        tracking_results[variable] = track_object(di, variable, start_date, end_date)['tracks']
+        logging.info(f"{datetime.now()} done with {variable}. Took {datetime.now() - task_start}.")
         
         # result is a dataset with variables: feature, cell, tracks
 
-    # - applies required overlap of one tracked variable with another (e.g., updrafts must overlap with condensate)
+    # - apply required overlap of one tracked variable with another (e.g., updrafts must overlap with condensate)
         
-    for obj in objects_to_track:
-        obj_di = di['objects'][obj] # specifications for the current variable
-        if isinstance(obj_di['require_overlap_with'], str):
-            if checkpoint.checkpoint_reached(f'{obj}_tracking/tracks') and 'overlap_tracks' in checkpoint.load_dataset(f'{obj}_tracking/tracks', nan_value=NAN).data_vars:
-                tracked_mask[obj] = checkpoint.load_dataset(f'{obj}_tracking/tracks', nan_value=NAN)
-            else:
-                # calculate
-                logging.info(f"{datetime.now()} requiring overlap of {obj} with {obj_di['require_overlap_with']}...")
-                tracked_mask[obj]['overlap_tracks'] = methods.misc.child_that_overlaps(tracked_mask[obj_di['require_overlap_with']].tracks, tracked_mask[obj].tracks)
-                checkpoint.checkpoint_dataset(tracked_mask[obj].fillna(NAN).astype(np.int32), f'{obj}_tracking/tracks')
-
-            # result is that the dataset now has variables: feature, cell, tracks, overlap_tracks
+    for variable in variables_to_track:
+        variable_di = di['objects'][variable] # specifications for the current variable
+        must_overlap_with = variable_di.get('require_overlap_with', False)
+        if not isinstance(must_overlap_with, str):
+            continue
+        if checkpoint.checkpoint_reached(f'{variable}_tracking/overlap_tracks'):
+            tracking_results[variable] = checkpoint.load_dataset(f'{variable}_tracking/overlap_tracks')['overlap_tracks'] # replace dataarray with that containing only overlapping tracks
+        else:
+            # calculate
+            logging.info(f"{datetime.now()} requiring overlap of {variable} with {must_overlap_with}...")
+            datasets = (tracking_results[must_overlap_with], tracking_results[variable]) # parent, child
+            overlap_tracks = methods.misc.wrap_map_blocks(methods.misc.child_that_overlaps_array, datasets)
+            tracking_results[variable] = overlap_tracks # replace tracks dataarray with overlap tracks
+            checkpoint.checkpoint_dataset(overlap_tracks.to_dataset(name='overlap_tracks'), f'{variable}_tracking/overlap_tracks')
 
     # - the main game happens here, multivaraite tracking. This is where the individually tracked variables are used to define one overall 'system'. E.g., if the order given is condensate->updrafts, the labels of each condensate object (cloud) are used to label each system, and we find all the updrafts that belong to that system, and merge the result
     
     # setup
     logging.info(f"{datetime.now()} multivariate tracking with order {di['multivariate']['link_order']}...")
-    slabs_checkpoint = checkpoint if di['multivariate']['checkpoint'] else None
     order = di['multivariate']['link_order'].split('->')
-    mask_give = tracked_mask[order[0]] # dataset for the variable whose labels we want to share (e.g., condensate)
-    mask_get = tracked_mask[order[1]] # dataset for the variable getting new labels from the other mask
-    if not len(order) == 2:
-        raise NotImplementedError(f"share labels for case like {di['link']['order']} not implemented")
-    
-    # use this to pick tracks or overlap_tracks for the given variable
-    def get_da(m):
-        return m.tracks if not 'overlap_tracks' in m.data_vars else m.overlap_tracks
+    variable_to_use_labels = order[0] # variable whose labels we want to share (e.g., condensate)
+    variable_to_get_labels = order[1] # variable getting new labels from the other mask (e.g., updrafts)
+    mask_to_use_labels = tracking_results[variable_to_use_labels]
+    mask_to_get_labels = tracking_results[variable_to_get_labels]
 
     # derive the overall system
-    logging.info(f"{datetime.now()} share labels...")
-    result = methods.ShareLabels(checkpoint=slabs_checkpoint, checkpoint_name='final/').tobac_like(get_da(mask_get), get_da(mask_give), tracks_record_path, current_col=order[1], update_col=order[0], new_tobac_table=False)
-    overall_system = methods.misc.union_all([result, get_da(mask_give)])
+    logging.info(f"{datetime.now()} share labels from {variable_to_use_labels} to {variable_to_get_labels}...")
+    result, extra_mappings = methods.ShareLabels(mask_to_get_labels, mask_to_use_labels, variable_to_get_labels, variable_to_use_labels).tobac_like(tracks_record_path, return_extra_mappings=True)
+    result = methods.ShareLabels().apply_mapping(result.to_dataset(name=variable_to_use_labels), extra_mappings, variable_to_use_labels, f"{variable_to_use_labels}_new")
+    overall_system = methods.misc.union_all([result, mask_to_use_labels])
 
     # collect results into a new dataset
     final = xr.Dataset({'system': overall_system,})
     
-    # add individual tracks if you siad you wanted them kept
-    if di['objects'][order[0]].get('keep_result', False):
-        mask_give_n = di['objects'][order[0]]['shortname']
-        final[f'{mask_give_n}_tracks'] = mask_give.tracks
-    if di['objects'][order[1]].get('keep_result', False):
-        mask_get_n = di['objects'][order[1]]['shortname']
-        final[f'{mask_get_n}_tracks'] = mask_get.tracks
+    # add individual tracks if you said you wanted them kept
+    if di['objects'][variable_to_use_labels].get('keep_result', False):
+        name = di['objects'][variable_to_use_labels]['shortname']
+        final[f'{name}_tracks'] = mask_to_use_labels
+    if di['objects'][variable_to_get_labels].get('keep_result', False):
+        name = di['objects'][variable_to_get_labels]['shortname']
+        final[f'{name}_tracks'] = mask_to_get_labels
 
-    # save that up :-)
+    # final result
     logging.info(f"{datetime.now()} saving...")
-    checkpoint.checkpoint_dataset(final.fillna(NAN).astype(np.int32), n)
-    final_loc = checkpoint.record[n]
-    result = os.system(f'scp {final_loc} {final_tracks_path}')
-    if result != 0:
-        logging.error("SCP command failed.")
+    utils.tools.save_xarray(final, final_tracks_path)
 
-    # remove the individual files
-    for obj in objects_to_track:
-        object_name = di['objects'][obj]['name'] # choices for variable being tracked
-        file_path = Path(data_dir) / f"{datetime_range}_{object_name}_tracks.nc"
+    # remove the individual masks
+    for variable in variables_to_track:
+        variable_name = di['objects'][variable]['name'] # choices for variable being tracked
+        file_path = Path(data_dir) / f"{datetime_range}_{variable_name}_tracks.nc"
         file_path.unlink(missing_ok=True)
 
     logging.info(f"{datetime.now()} Saved result to {final_tracks_path}.")

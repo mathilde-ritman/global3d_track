@@ -46,20 +46,16 @@ class Checkpoint:
     def checkpoint_reached(self, name):
         return name in self.record
     
-    def load_dataset(self, name, nan_value=None):
+    def load_dataset(self, name):
         data_path = Path(self.record[name])
         logging.info(f"{datetime.now()} loading checkpoint at {data_path}")
         ds = xr.open_dataset(data_path)
-        if nan_value is not None:
-            ds = ds.where(ds != nan_value)
         return ds
     
-    def load_dataarray(self, name, nan_value=None):
+    def load_dataarray(self, name):
         data_path = Path(self.record[name])
         logging.info(f"{datetime.now()} loading checkpoint at {data_path}")
         da = xr.open_dataarray(data_path)
-        if nan_value is not None:
-            da = da.where(da != nan_value)
         return da
 
     def checkpoint_dataset(self, ds, name):
@@ -68,14 +64,18 @@ class Checkpoint:
         data_path.parent.mkdir(parents=True, exist_ok=True)
         # compress
         if isinstance(ds, xr.DataArray):
-            logging.info(f"{datetime.now()} warning: saving a DataArray, not a Dataset; {ds.name=}")
             if ds.name is None:
                 ds = ds.rename("data")
+            if not np.issubdtype(ds.dtype, np.integer):
+                ds = ds.astype(np.int32)
             encoding = {ds.name: {"zlib": True, "complevel": 4}}
         else:
-            logging.info(f"{datetime.now()} saving a Dataset; {list(ds.data_vars)=}")
-            encoding = {var: {"zlib": True, "complevel": 4} for var in ds.data_vars}
-        ds.to_netcdf(data_path, encoding=encoding, engine="h5netcdf")
+            encoding = {}
+            for var in ds.data_vars:
+                if not np.issubdtype(ds[var].dtype, np.integer):
+                    ds[var] = ds[var].astype(np.int32)
+                encoding[var] = {"zlib": True, "complevel": 4}
+        ds.fillna(0).to_netcdf(data_path, encoding=encoding, engine="h5netcdf")
         # record action
         self.record[name] = str(data_path)
         self.save_record()
@@ -112,18 +112,27 @@ class Checkpoint:
         return np.load(data_path)
 
     def get_last_checkpoint(self, regex=''):
-        regex = re.compile(regex)
-        relevant_checkpoints = [k for k in self.record if regex.search(k)]
+        pattern = re.compile(regex)
+        relevant_checkpoints = [k for k in self.record if pattern.search(k)]
         if not relevant_checkpoints:
-            return None
+            result = None
         else:
-            return max(relevant_checkpoints, key=lambda k: self.record[k])
+            result = max(relevant_checkpoints, key=lambda k: int(pattern.search(k).group(1)))
+        return result
+        
+    def remove_file(self, path):
+        # remove file safely using pathlib
+        path = Path(path)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as e:
+            raise RuntimeError(f"failed to remove {path}") from e
         
     def remove_old(self, name):
         data_path = Path(self.record[name])
         if data_path.exists():
-            os.system(f"rm {data_path}")
+            self.remove_file(data_path)
             del self.record[name]
-            logging.info(f"{datetime.now()} removed data at {data_path}")
+            self.save_record()
         else:
             logging.warning(f"{datetime.now()} checkpoint {data_path} does not exist, cannot remove.")

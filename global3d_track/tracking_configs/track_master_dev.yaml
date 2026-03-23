@@ -1,0 +1,99 @@
+#### --------------- 4D cloud tracking in ICON ------------------ ####
+
+# Configuration file for 4D cloud and updraft tracking in ICON simulations. 
+# Using this, set the model version, region, time period. The choose the variables to track and which methods with which to track them. Lastly set how you would like to link results if performing multivariate tracking and select the post processing steps to perform. You will also need to choose some batch sizes for various steps.
+
+# Mathilde Ritman 2026 (mathilde.ritman@physics.ox.ac.uk)
+
+#### -------------- global settings ------------------- ####
+
+# for the current run, whether to overwrite existing data or checkpoints
+overwrite: 1
+overwrite_tobac: 0 # use this if you want to overwrite the other tracking steps but don't need to redo the toback linking
+restart_checkpoints: 1
+
+# set output directories
+data_directory: /work/bb1153/b382635/data/final_tracks
+checkpoint_directory: /scratch/b/b382635/tracking_checkpoints
+
+# version name
+tobac_version: tbc_dev
+version_name: dcc_dev
+
+# model, region and time period
+model_version: 4008a # ICON NextGEMs simulation output
+region: anatomy_example_large # see named regions in utils/regrid
+start_date: '2021-07-01 00:00:00'
+end_date: '2021-07-03 00:00:00'
+
+# batch feature detection and segmentation
+detect_segment_hours: 12 # number of hours to process at once (has no impact on outcome, as this step is not time aware)
+
+# batch feature tracking:
+track_hours: 24 # tobac results will be impacted as centroid tracking is performed on one file at a time, results from one resulting file will be stitched to the next in a post-processesing step
+
+#### ---------------- tracking specifications ----------------- ####
+
+# choose which fields to track on ('objects') and which methods to use
+
+# list and description of options:
+
+# name
+# shortname
+# tobac_config - should be a path to a yaml file with parameters to pass to tobac detection, segmentation and tracking functions
+# methods: tobac - boolean, whether to perform tobac tracking on the current object
+# methods: erode - whether to track using the weighted erosion overlap check on the current object, either False or in (0,1) to specify the relative amount by which to erode features
+# methods: connect - boolean, whether to track using a contiguity check
+# require_overlap_with: False or the name of another object listed, will exclude all the features that never overlap with results from the specified variable
+# keep_result: boolean, whether to keep the mask for this variable as well as any overall results in the case of multivariate tracking
+
+objects:
+  updraft:
+    name: updraft
+    shortname: u
+    tobac_config: /home/b/b382635/s/global3d_track/global3d_track/tracking_configs/core_config.yaml
+    methods: 
+      tobac: True 
+      erode: False # either False or in (0,1)
+      connect: True
+    require_overlap_with: False # 
+    keep_result: True
+
+  ice:
+    name: ice
+    shortname: i
+    tobac_config: /home/b/b382635/s/global3d_track/global3d_track/tracking_configs/ice_config.yaml
+    methods:
+      tobac: True
+      erode: 0.5
+      connect: False
+    require_overlap_with: updraft # only keep tracks that overlap with an updraft track at some point in time
+    keep_result: False
+
+# settings to determine checkpoint 
+inner_checkpoint: False # whether to checkpoint progress for erosion
+topography_check_n: False # checkpoint topography progress every n time steps
+
+# settings by which to link fields for multivariate tracking, e.g., link_order: ice->updraft means all updrafts contiguous with one ice cloud are collected under that ice cloud as one system
+multivariate:
+  link_order: ice->updraft
+
+#### ---------------- post processing options ----------------- ####
+
+post_processing:
+  link_results:
+    ice: False
+    updraft: connect
+    system: 0.5 # erode
+  filter_tracks: True # whether to determine track validity
+
+# post_processing:
+#   link_files: True
+#   define_anvil: True
+#   require_core_first: True # whether to require a core detection at the system start time
+#   require_lifetime: 1 # (hours) minimum lifetime of a track in hours
+
+# batch_size:
+#   define: 4 # number of time steps to batch process for anvil base height calculations
+#   filter: 4  # number of time steps to batch process for track filtering
+

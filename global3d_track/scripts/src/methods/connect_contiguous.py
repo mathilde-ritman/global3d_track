@@ -26,7 +26,7 @@ class Connect:
     '''
 
     def __init__(self, boolean_array, method='ndimage'):
-        self.boolean_array = boolean_array
+        self.boolean_array = boolean_array.chunk({dim: -1 for dim in boolean_array.dims}) if isinstance(boolean_array, xr.DataArray) else boolean_array
 
         if method == 'cc3d':
             self.method = self.get_components_cc3d

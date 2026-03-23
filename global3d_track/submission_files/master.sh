@@ -16,7 +16,16 @@ source activate hackathon_env
 
 # yaml=/home/b/b382635/s/global3d_track/global3d_track/tracking_configs/track_master.yaml
 # yaml=/home/b/b382635/s/global3d_track/global3d_track/tracking_configs/track_master_high_res.yaml
-yaml=/home/b/b382635/s/my_notebooks/CSU/tracking_configs/track_master.yaml
+# yaml=/home/b/b382635/s/my_notebooks/CSU/tracking_configs/track_master.yaml
+yaml=/home/b/b382635/s/my_notebooks/model_paper/grl_submission/tracking_configs/track_master.yaml
+# yaml=/home/b/b382635/s/my_notebooks/model_paper/grl_submission/tracking_configs/track_master_no_ec.yaml
+
+# yaml=/home/b/b382635/s/global3d_track/global3d_track/tracking_configs/track_master_dev.yaml
 
 cd /home/b/b382635/s/global3d_track
 python -m global3d_track.scripts.track.master $yaml
+
+
+# # & now compare to results using g3d:
+# yaml=/home/b/b382635/s/my_notebooks/CSU/tracking_configs/track_master_g3d.yaml
+# python -m global3d_track.scripts.track.master $yaml

@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any, Union, Callable
 import logging
 import tobac
+import datetime
 from .connect_contiguous import Connect
-
+from ..utils import tools
 
 class Helpers:
 
@@ -58,7 +59,7 @@ class Helpers:
     def _table_to_dataset(self, table, col, dataset, base_col='feature'):
         di = table.set_index(base_col)[col].to_dict()
         feature_array = dataset[base_col].values
-        dataarray = xr.DataArray(np.vectorize(lambda x: di.get(x, -9))(feature_array), dims=dataset[base_col].dims, coords=dataset[base_col].coords)
+        dataarray = xr.DataArray(np.vectorize(lambda x: di.get(x, 0))(feature_array), dims=dataset[base_col].dims, coords=dataset[base_col].coords)
         return dataarray
 
 
@@ -92,13 +93,9 @@ class Track(Connect, Helpers):
         self.save = save
         self.savedir_v = f"{self.options['savedir']}/{self.options['version_name']}"
         os.makedirs(self.savedir_v, exist_ok=True)
-        self.features = None
-        self.mask_dataset = None
 
 
-    def perform(self, detect=True, segment=True, track=False, merge=False, connect=False, save=None, merge_method='ndimage'):
-
-        NAN = -9
+    def perform(self, detect=True, segment=True, track=False, merge=False, connect=False, save=None):
 
         if isinstance(save, bool):
             self.save = save
@@ -107,16 +104,14 @@ class Track(Connect, Helpers):
 
         dxy, dt = di['grid_spacing'], di['time_spacing']
 
-        logging.info(f"{self.savedir_v=}")
+        logging.info(f"{datetime.datetime.now()} Output will save to: {self.savedir_v}")
 
         # -- load or compute features
         if Path(self.savedir_v, 'features.h5').is_file() and not self.overwrite:
             features = pd.read_hdf(Path(self.savedir_v, 'features.h5'), 'table')
-            self.features = features
 
         elif detect:
             features = tobac.feature_detection_multithreshold(self.select_data, dxy, **di['params_features'])
-            self.features = features
 
             if self.save:
                 savepath = Path(self.savedir_v, 'features.h5')
@@ -125,8 +120,7 @@ class Track(Connect, Helpers):
 
         # -- load or compute segmentation
         if Path(self.savedir_v, 'segmented_mask.nc').is_file() and not self.overwrite:
-            mask_dataset = xr.open_mfdataset(Path(self.savedir_v, 'segmented_mask.nc'))
-            # segmented_features = pd.read_hdf(Path(self.savedir_v, 'segmented_features.h5'), 'table')
+            mask_dataset = xr.open_dataset(Path(self.savedir_v, 'segmented_mask.nc'))
 
         elif segment:
             segmented_mask, segmented_features = tobac.segmentation.segmentation(features, self.segment_data, dxy, **di['params_segmentation'])
@@ -135,60 +129,26 @@ class Track(Connect, Helpers):
             mask_dataset['feature'].attrs['description'] = 'tobac features after segmentation'
             
             if self.save:
-                mask_dataset.where(mask_dataset > 0, NAN).astype(np.int32).to_netcdf(Path(self.savedir_v, 'segmented_mask.nc'))
-                # segmented_features.to_hdf(Path(self.savedir_v, 'segmented_features.h5'), 'table')
+                tools.save_xarray(mask_dataset, Path(self.savedir_v, 'segmented_mask.nc'))
                 logging.info('feature segmentation results saved to ' + self.savedir_v)
             
         # -- load or compute tracking
         if Path(self.savedir_v, 'tracked_features.h5').is_file() and not self.overwrite_tracks:
             tracks = pd.read_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
-            mask_dataset = xr.open_mfdataset(Path(self.savedir_v, 'tracked_mask.nc'))
+            mask_dataset = xr.open_dataset(Path(self.savedir_v, 'tracked_mask.nc'))
 
         elif track:
-            tracks = tobac.linking_trackpy(self.features, None, dt=dt, dxy=dxy, **di['params_linking'])
+            tracks = tobac.linking_trackpy(features, None, dt=dt, dxy=dxy, **di['params_linking'])
+            tracks['cell'] = tracks.cell.where(tracks.cell!=-1, 0) # untracked features are reassigned from -1 to 0
             # -- add to mask dataset
-            if self.mask_dataset is not None:
-                mask_dataset = self.mask_dataset
             mask_dataset['cell'] = self._table_to_dataset(table=tracks, col='cell', dataset=mask_dataset)
             mask_dataset['cell'] = mask_dataset.cell
             mask_dataset['cell'].attrs['description'] = 'tobac features after tracking'
-            mask_dataset = mask_dataset.where(mask_dataset > 0)
 
             if self.save:
-                mask_dataset.astype(np.int32).to_netcdf(Path(self.savedir_v, 'tracked_mask.nc'))
+                tools.save_xarray(mask_dataset, Path(self.savedir_v, 'tracked_mask.nc'))
                 tracks.to_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
                 logging.info('tracking results saved to ' + str(Path(self.savedir_v, 'tracks.h5')))
-        
-        # -- load or compute tobac merges and splits
-        if Path(self.savedir_v, 'merged_split_mask.nc').is_file() and not self.overwrite_tracks:
-            mask_dataset = xr.open_mfdataset(Path(self.savedir_v, 'merged_split_mask.nc'))
-
-        elif merge:
-            merges = tobac.merge_split.merge_split_MEST(tracks, dxy=dxy)
-            # -- add to mask dataset
-            tracks["merged"] = (merges.feature_parent_track_id.data+1).astype(np.int32)
-            mask_dataset['merged'] = self._table_to_dataset(table=tracks, col='merged', dataset=mask_dataset)
-            mask_dataset['merged'] = mask_dataset.merged
-            mask_dataset['merged'].attrs['description'] = 'tobac features after track merging and splitting'
-
-            if self.save:
-                mask_dataset.to_netcdf(Path(self.savedir_v, 'merged_split_mask.nc'))
-                tracks.to_hdf(Path(self.savedir_v, 'tracked_features.h5'), 'table')
-                logging.info('tobac merge/split results saved to ' + str(Path(self.savedir_v, 'merged_split_mask.nc')))
-
-        # -- load or compute custom merge
-        if Path(self.savedir_v, 'connected_merge_mask.nc').is_file() and not self.overwrite_tracks:
-            mask_dataset = xr.open_mfdataset(Path(self.savedir_v, 'connected_merge_mask.nc'))
-
-        elif connect:
-            result = Connect(mask_dataset['cell'].data > 0, method=merge_method).get_components()
-            # -- add to mask dataset
-            mask_dataset['connected_merge'] = (mask_dataset.dims, result)
-            mask_dataset['connected_merge'] = mask_dataset['connected_merge'].where(mask_dataset['connected_merge'] > 0)
-            mask_dataset['merged'].attrs['description'] = 'tobac features after cumstom merge'
-            if self.save:
-                mask_dataset.to_netcdf(Path(self.savedir_v, 'connected_merge_mask.nc'))
-                logging.info('custom merging results saved to ' + str(Path(self.savedir_v, 'connected_merge_mask.nc')))
             
         # -- output
         if connect or merge or track:

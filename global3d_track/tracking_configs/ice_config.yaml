@@ -23,7 +23,7 @@ params_features:
 
 params_segmentation:
   method: 'watershed'
-  threshold: 0.00001 # kg/kg --- was 0.000005
+  threshold: 0.000005 # kg/kg --- was 0.000005
   # threshold: 0.00005 # kg/kg mixing ratio - restrictive threshold experiment
   target: "maximum"
   seed_3D_flag: 'box'

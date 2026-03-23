@@ -51,21 +51,30 @@ def load_tobac_data(variables, region, start_date, end_date, model_version='4008
     if model_version=='4008a':
         cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
         dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+        # ensure no repeats in the variables
+        variables = list(set(list(variables) + ['zghalf','zg']))
+        relevant_data = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
+        # relevant_data = xr.concat(li, dim='time') - no longer needed regrid outputs ds, not list of ds
+        data = preprocess_for_tobac(relevant_data)
+        if 'cli' in data.data_vars and 'clw' in data.data_vars:
+            data['cl'] = data.cli + data.clw
     elif model_version=='d3hp003feb':
         cat = intake.open_catalog('https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml')['online']
         dataset = cat.icon_d3hp003feb(time="PT15M", zoom=11).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
         dataset = dataset.rename({'wa':'wa_phy',})
+    elif model_version=='maor':
+        # tracking data
+        # fdir = Path('/work/bb1368/b382152/experiments/sea_breeze_houston_june_R2B12_DOM02/')
+        # cldpath = list(fdir.glob('*_v1/sea_breeze_houston*cld*'))[1]
+        # dynpath = list(fdir.glob('*_v1/sea_breeze_houston*dyn*'))[1]
+        # data = xr.open_mfdataset([cldpath, dynpath])
+        fpath = Path('/work/bb1368/b382152/experiments/sea_breeze_houston_june_R2B12_DOM02_ERA5/run_20220617T030000-20220618T145959_perturbed_baseline_DOM02_v1/sea_breeze_houston_june_R2B12_DOM02_atm_3d_tracking_pl_20220617T030000Z.nc')
+        data = xr.open_mfdataset(fpath)
+        for v in data.data_vars:
+            data[v].attrs.pop('standard_name', None)
+            data[v].name = None    
     else:
         raise ValueError("Model version not implemented")
-    # process data
-    # ensure no repeats in the variables
-    variables = list(set(list(variables) + ['zghalf','zg']))
-    relevant_data = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
-    # relevant_data = xr.concat(li, dim='time') - no longer needed regrid outputs ds, not list of ds
-    data = preprocess_for_tobac(relevant_data)
-    if 'cli' in data.data_vars and 'clw' in data.data_vars:
-        data['cl'] = data.cli + data.clw
-
     return data
 
 

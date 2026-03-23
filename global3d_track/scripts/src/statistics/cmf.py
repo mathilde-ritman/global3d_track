@@ -5,7 +5,6 @@ Mathilde Ritman 2025
 import xarray as xr
 import numpy as np
 import dask
-from typing import Union
 
 # funcs to process different mass fluxes
 
