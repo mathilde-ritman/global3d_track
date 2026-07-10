@@ -32,8 +32,8 @@ class GRLStats:
         self.CMF = calcs.CMF(grid_spacing=self.grid_spacings)
     
     def define_anvil(self, mask, tw):
-        abh = definitions.discover_abh(tw) # calculate anvil base height from total condensate profile
-        return mask.where(mask.level_full <= abh)
+        abh = definitions.discover_abh(tw).mean('time') # calculate anvil base height from total condensate profile
+        return mask.where(mask.level_full <= abh), abh
     
     def get_density(self, mask, data, name):
 
@@ -41,7 +41,7 @@ class GRLStats:
         masked_data = data[req_vars].sel(time=mask.time).where(mask>0)
 
         # total density
-        rho = calcs.density(masked_data)
+        rho = calcs.density(masked_data) # kg m-3
         rho_mu = rho.mean(('lat','lon'))
         rho_mu.attrs = dict(units='kg m-3', long_name='mean density')
 
@@ -77,6 +77,8 @@ class GRLStats:
                         f'{name}_depth':depth,
                         f'{name}_volume': volume,
                 })
+        
+        ds = ds.where(ds>0)
 
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
@@ -85,24 +87,44 @@ class GRLStats:
 
         req_vars = ['pfull','ta','hus','cli','clw','qg','qr','qs','dzghalf','wa_phy']
         masked_data = data[req_vars].sel(time=mask.time).where(mask>0)
+        footprint = mask.max('level_full') > 0 # get footprint for precip calculations
+        footprint_data = data[['pr']].sel(time=mask.time).where(footprint)
+
+        # xWP(ds, v='cli')
+        iwp = calcs.xWP(masked_data, v='cli')
+        swp = calcs.xWP(masked_data, v='qs')
+        gwp = calcs.xWP(masked_data, v='qg')
+        iwp.attrs = dict(units='kg m-2', long_name=f'{name} ice water path')
+        swp.attrs = dict(units='kg m-2', long_name=f'{name} snow water path')
+        gwp.attrs = dict(units='kg m-2', long_name=f'{name} graupel water path')
 
         # frozen water path
-        iwp, iwc = calcs.IWP(data, return_iwc=True)
-        iwc = iwc.mean(('lat','lon','level_full'))
-        iwp.attrs = dict(units='kg m-1', long_name=f'{name} ice water path')
-        iwc.attrs = dict(units='kg m-3', long_name=f'{name} mean ice water concentration')
+        fwp, fwc = calcs.IWP(masked_data, return_iwc=True)
+        fwc = fwc.mean(('lat','lon'))
+        fwp.attrs = dict(units='kg m-2', long_name=f'{name} frozen water path')
+        fwc.attrs = dict(units='kg m-3', long_name=f'{name} mean frozen water concentration')
 
         # total water path
-        twp, twc = calcs.TWP(data, return_twc=True)
+        twp, twc = calcs.TWP(masked_data, return_twc=True)
         tw = twc.sum(('lat','lon')) * self.grid_spacings**2 * masked_data.dzghalf.mean(('lat','lon')) # kg
         twp.attrs = dict(units='kg m-1', long_name=f'{name} total water path')
         tw.attrs = dict(units='kg', long_name=f'{name} total water content')
 
-        ds = xr.Dataset({f'{name}_iwp': iwp,
-                        f'{name}_iwc': iwc,
-                        f'{name}_twp': twp,
-                        f'{name}_tw': tw,
-                })
+        # precipitation
+        pr = footprint_data.pr # kg m-2 s-1
+        pr.attrs = dict(units='kg m-2 s-1', long_name=f'{name} precipitation flux')
+
+        ds = xr.Dataset({f'{name}_fwp': fwp,
+                    f'{name}_fwc': fwc,
+                    f'{name}_twp': twp,
+                    f'{name}_tw': tw,
+                    f'{name}_pr': pr,
+                    f'{name}_iwp': iwp,
+                    f'{name}_swp': swp,
+                    f'{name}_gwp': gwp,
+            })
+        
+        ds = ds.where(ds>0)
 
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
@@ -127,9 +149,11 @@ class GRLStats:
         mean_w.attrs = dict(units='m s-1', long_name=f'{name} mean vertical velocity')
 
         # mass flux
-        cmf = self.CMF.mass_flux(w, rho).mean(('lat','lon'))
+        cmf_mu = self.CMF.mass_flux(w, rho).mean(('lat','lon'))
+        cmf_max = self.CMF.mass_flux(w, rho).max(('lat','lon'))
         cmt = self.CMF.mass_transport(w, rho)
-        cmf.attrs = dict(units='kg s-1 m-2', long_name=f'{name} convective mass flux')
+        cmf_mu.attrs = dict(units='kg s-1 m-2', long_name=f'{name} mean convective mass flux')
+        cmf_max.attrs = dict(units='kg s-1 m-2', long_name=f'{name} maximum convective mass flux')
         cmt.attrs = dict(units='kg s-1', long_name=f'{name} convective mass transport')
 
         # divergence
@@ -143,22 +167,23 @@ class GRLStats:
         ds = xr.Dataset({f'{name}_rho': rho_mu,
                         f'{name}_max_w': max_w,
                         f'{name}_mean_w': mean_w,
-                        f'{name}_cmf': cmf,
+                        f'{name}_cmf_mu': cmf_mu,
+                        f'{name}_cmf_max': cmf_max,
                         f'{name}_cmt': cmt,
                         f'{name}_div': div,
                 })
 
         dims = (x for x in ('time','level_full','lat','lon') if x in ds.dims)
         return ds.transpose(*dims)
-
+    
     def get_environment(self, mask, data, name='environment'):
 
         # get max anvil footprint
-        vertical_extent = mask.max(('time','lat','lon'))
-        footprint = mask.max(('time','level_full'))
+        max_footprint = mask.max(('time','level_full')) > 0 # get max footprint over time and vertical levels
+        initial_footprint = mask.isel(time=0).max('level_full') > 0 # get initial cloud mask at time of first detection
 
         # get inital data at footprint
-        masked_data = data.where(np.logical_and(vertical_extent>0, footprint>0)).sel(time=mask.time[0])
+        masked_data = data.isel(time=0).where(np.logical_and(max_footprint, ~initial_footprint))
 
         # surface temperature
         ts = masked_data.ts.mean(('lat','lon')) # K
@@ -205,45 +230,45 @@ class GRLStats:
 
         if not (core_mask.max() > 0):
             # there are no cores in the mask provided
-            return xr.Dataset(coords=dict(core=None, time=core_mask.time)).expand_dims('core').fillna(self.NAN)
+            return xr.Dataset(coords=dict(core=None, time=core_mask.time)).expand_dims('core')
        
         # iterate cores
         cores = dask.array.unique(core_mask.data).compute()
         cores = cores[~np.isnan(cores)]
 
         # process
-        tasks = []
+        results = []
         for c in cores:
-            task = delayed(self.individual_core)(core_mask, c, data, name)
-            tasks.append(task)
+            results.append(self.individual_core(core_mask, c, data, name))
 
         # collect
-        core_stats = xr.concat(compute(*tasks), dim='core')
+        core_stats = xr.concat(results, dim='core')
         core_stats = core_stats.assign_coords({'core':cores})
-        return core_stats.fillna(self.NAN)
+
+        return core_stats
     
     def anvil(self, anvil_mask, data, name='anvil'):
 
         if not (anvil_mask.max() > 0):
-            return xr.Dataset(coords=anvil_mask.coords).fillna(self.NAN) # there are no results in the mask provided
+            return xr.Dataset(coords=anvil_mask.coords) # there are no results in the mask provided
         
         anvil_stats = self.get_geometric(anvil_mask, data, name)
         anvil_stats.update(self.get_condensates(anvil_mask, data, name))
         anvil_stats.update(self.get_dynamic(anvil_mask, data, name))
 
-        return anvil_stats.fillna(self.NAN)
+        return anvil_stats
 
     def cloud(self, system_mask, data, name='cloud', shortname='c'):
 
         if not (system_mask.max() > 0):
-            return xr.Dataset(coords=system_mask.coords).fillna(self.NAN) # there are no results in the mask provided
+            return xr.Dataset(coords=system_mask.coords) # there are no results in the mask provided
         
         cloud_stats = self.get_geometric(system_mask, data, name, shortname=shortname)
         cloud_stats.update(self.get_condensates(system_mask, data, name))
         cloud_stats.update(self.get_density(system_mask, data, name))
         cloud_stats.update(self.get_environment(system_mask, data))
 
-        return cloud_stats.fillna(self.NAN)
+        return cloud_stats
 
     def get_everything(self, mask, data, ):
             
@@ -252,7 +277,9 @@ class GRLStats:
 
         stats = self.cloud(system_mask, data) # system results
         stats = stats.merge(self.cores(core_mask, data, 'core')) # core results
-        anvil_mask = self.define_anvil(mask.system, stats.cloud_tw) # define anvil
+        anvil_mask, ABH = self.define_anvil(mask.system, stats.cloud_tw) # define anvil
+        ABH.attrs = dict(units='dimensionless', long_name='model level used to define the anvil base height')
+        stats['ABH'] = ABH # add anvil base height to stats
         stats = stats.merge(self.anvil(anvil_mask, data, 'anvil')) # anvil results
 
         return stats.fillna(self.NAN)

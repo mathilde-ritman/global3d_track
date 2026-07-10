@@ -244,9 +244,3 @@ class ShareLabels:
         mappings, extra_mappings = self.proc_optimized(all_index_vals, all_results)
         logging.info(f"{datetime.now()} {n_init} label maps reduced to {len(mappings.keys())}")
         return mappings, extra_mappings
-        # all_index_vals, all_results = self.proc_optimized(all_index_vals, all_results)
-        # all_index_vals = np.array(all_index_vals).astype(int)
-        # all_results = np.array(all_results)
-        # all_results = np.where(all_results != self.nan_val, all_results, 0).astype(int) # only valid mappings
-        # logging.info(f"{datetime.now()} {n_init} label maps reduced to {all_results.size}")
-        # return all_index_vals, all_results

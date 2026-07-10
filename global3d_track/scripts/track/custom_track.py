@@ -39,17 +39,22 @@ def track_object(di, obj_name, start_date, end_date):
     # directories
     tobac_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date, use_tobac_version=True))
     data_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date))
-    check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, start_date=start_date))
+    if di['checkpoint_directory'] is not None:
+        check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, start_date=start_date))
+    else:
+        check_dir = None
     
     # specifications
     obj_di = di['objects'][obj_name] # choices for variable being tracked
     name = obj_di['name'] # variable name
     tobac_config = utils.tools.load_yaml(obj_di['tobac_config']) # tobac parameters
+    vdim = tobac_config.get('vdim', 'level_full') # vertical dimension to use for processing, if not specified in tobac config, default to level_full
 
     # checkpoints
     checkpoint = Checkpoint(check_dir, overwrite=restart_checkpoints) # checkpoints
     n = f'{name}_tracking/' # subfolder for checkpointing current object
-    (check_dir/n).mkdir(parents=True, exist_ok=True) # make subdirectory for current object
+    if check_dir is not None:
+        (check_dir/n).mkdir(parents=True, exist_ok=True) # make subdirectory for current object
     inner_checkpoint = dict(checkpoint=(checkpoint if di.get('inner_checkpoint', False) else None), checkpoint_name=n, check_n=di.get('topography_check_n', None))
 
     # output paths
@@ -74,6 +79,11 @@ def track_object(di, obj_name, start_date, end_date):
     if final_tracks_path.exists() and not overwrite:
         logging.info(f"{datetime.now()} loaded {name} tracks from {final_tracks_path}")
         track_mask = xr.open_dataset(final_tracks_path)
+        return track_mask
+    
+    if check_dir is not None and (check_dir / f'{n}final_tracks.nc').exists() and not (overwrite or restart_checkpoints):
+        logging.info(f"{datetime.now()} loaded {name} tracks from checkpoint...")
+        track_mask = xr.open_dataset(check_dir / f'{n}final_tracks.nc')
         return track_mask
 
     # - details
@@ -141,7 +151,7 @@ def track_object(di, obj_name, start_date, end_date):
             # perform erosion of mask
             logging.info(f"{datetime.now()} eroding mask...")
             erody_by = obj_di['methods']['erode']
-            erode_mask = methods.Erode(**inner_checkpoint).weighted_erode(track_mask.cell, value=erody_by)
+            erode_mask = methods.Erode(**inner_checkpoint).weighted_erode(track_mask.cell, value=erody_by, vdim=vdim)
             checkpoint.checkpoint_dataset(erode_mask, f'{n}erode-erode_mask')
             flag = 1
 
@@ -193,7 +203,8 @@ def track_object(di, obj_name, start_date, end_date):
         track_mask['tracks'] = track_mask.cell
     track_mask = track_mask.drop_vars(['feature', 'cell'])
     utils.tools.save_xarray(track_mask, final_tracks_path)
-    shutil.copy2(final_tracks_path, check_dir / f'{n}final_tracks.nc') # copy result to checkpoint directory
+    if check_dir is not None:
+        shutil.copy2(final_tracks_path, check_dir / f'{n}final_tracks.nc') # copy result to checkpoint directory
 
     logging.info(f"{datetime.now()} Saved {name} result to {final_tracks_path}.")
 
@@ -211,8 +222,12 @@ def perform(yaml_file, start_date, end_date):
     # directories
     version_name = utils.tools.version_name(di, start_date=start_date)
     data_dir = Path(di['data_directory'], version_name)
-    check_dir = Path(di['checkpoint_directory'], version_name)
-    utils.tools.make_directories((data_dir, check_dir))
+    if di['checkpoint_directory'] is not None:
+        check_dir = Path(di['checkpoint_directory'], version_name)
+        utils.tools.make_directories((data_dir, check_dir))
+    else:
+        check_dir = None
+        utils.tools.make_directories((data_dir, ))
 
     # checkpoints
     checkpoint = Checkpoint(check_dir, overwrite=restart_checkpoints) # define class
@@ -234,11 +249,10 @@ def perform(yaml_file, start_date, end_date):
     for variable in variables_to_track:
         task_start = datetime.now()
         logging.info(f"{task_start} procesing object {variable}")
-        check_dir.mkdir(parents=True, exist_ok=True)
         tracking_results[variable] = track_object(di, variable, start_date, end_date)['tracks']
         logging.info(f"{datetime.now()} done with {variable}. Took {datetime.now() - task_start}.")
         
-        # result is a dataset with variables: feature, cell, tracks
+        # result is a dataset with variables: tracks
 
     # - apply required overlap of one tracked variable with another (e.g., updrafts must overlap with condensate)
         
@@ -272,6 +286,10 @@ def perform(yaml_file, start_date, end_date):
     result, extra_mappings = methods.ShareLabels(mask_to_get_labels, mask_to_use_labels, variable_to_get_labels, variable_to_use_labels).tobac_like(tracks_record_path, return_extra_mappings=True)
     result = methods.ShareLabels().apply_mapping(result.to_dataset(name=variable_to_use_labels), extra_mappings, variable_to_use_labels, f"{variable_to_use_labels}_new")
     overall_system = methods.misc.union_all([result, mask_to_use_labels])
+
+    # save extra mappings
+    extra_maps_path = tracks_record_path.with_name(tracks_record_path.name.replace('system_label_maps', 'system_extra_maps'))
+    extra_mappings.to_hdf(extra_maps_path, 'table')
 
     # collect results into a new dataset
     final = xr.Dataset({'system': overall_system,})

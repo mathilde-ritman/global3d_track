@@ -29,14 +29,14 @@ class Erode:
         eroded = ndi.binary_erosion(da_bool, structure=structure, iterations=value)
         return da.where(eroded)
     
-    def weighted_erode(self, da, value, dims=('lat','lon'), PBC_flag=None, parallel=True):
+    def weighted_erode(self, da, value, dims=('lat','lon'), PBC_flag=None, parallel=True, vdim='level_full'):
         ''' da: xarray.DataArray '''
         logging.info(f"{datetime.now()} weighted eroding with value {value}")
         da = da.where(da>0)
         if parallel:
-            weighted_topog = self.compute_topography_parallel(da, normalise=True, n_jobs=-1)
+            weighted_topog = self.compute_topography_parallel(da, normalise=True, n_jobs=-1, vdim=vdim)
         else:
-            weighted_topog = self.compute_topography(da, normalise=True)
+            weighted_topog = self.compute_topography(da, normalise=True, vdim=vdim)
         return da.where(weighted_topog > value, 0)
 
     def compute_topography(self, labeled_array, normalise=True):
@@ -51,6 +51,7 @@ class Erode:
         # process each
         logging.info(f"{datetime.now()} computing topography for {len(unique_labels)} labels")
         durations = []
+        average_duration = 0
 
         for label_value in unique_labels:
             # logging.info(f"{datetime.now()} computing topography for label {label_value}")
@@ -84,7 +85,7 @@ class Erode:
             return label_value, distance / max_distance
         return label_value, distance
 
-    def compute_topography_parallel(self, da, normalise=True, n_jobs=-1):
+    def compute_topography_parallel(self, da, normalise=True, n_jobs=-1, vdim='level_full'):
         logging.info(f"{datetime.now()} computing topography at each time and height level...")
         topography = np.zeros_like(da, dtype=float)
 
@@ -103,14 +104,15 @@ class Erode:
                 logging.info(f"{datetime.now()} resuming from time index {tidx}")
                 topography = self.checkpoint.load_array(latest_checkpoint) # load previous
                 itr_times = range(tidx+1, ntimes) # start from next time step
-
+        
+        average_duration = 0
         for tidx in itr_times:
             start_time = time.time()
             slices[0] = tidx if ntimes > 1 else slice(None)
             da_t = da.isel(time=tidx) if ntimes > 1 else da
-            for level in range(len(da_t.level_full)):
+            for level in range(len(da_t[vdim])):
                 slices[-3] = level
-                arr = da_t.isel(level_full=level).values.astype(np.int16)
+                arr = da_t.isel({vdim:level}).values.astype(np.int16)
                 unique_labels = np.unique(arr)
                 unique_labels = unique_labels[unique_labels != 0]
                 results = joblib.Parallel(n_jobs=n_jobs)(joblib.delayed(self.compute_label_topography)(label, arr, normalise) for label in unique_labels)

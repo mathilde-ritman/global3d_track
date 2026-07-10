@@ -129,8 +129,9 @@ class Track(Connect, Helpers):
             mask_dataset['feature'].attrs['description'] = 'tobac features after segmentation'
             
             if self.save:
-                tools.save_xarray(mask_dataset, Path(self.savedir_v, 'segmented_mask.nc'))
-                logging.info('feature segmentation results saved to ' + self.savedir_v)
+                savepath = Path(self.savedir_v, 'segmented_mask.nc')
+                tools.save_xarray(mask_dataset,savepath)
+                logging.info('feature segmentation results saved to ' + str(savepath))
             
         # -- load or compute tracking
         if Path(self.savedir_v, 'tracked_features.h5').is_file() and not self.overwrite_tracks:

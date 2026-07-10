@@ -66,6 +66,7 @@ def detect_segment_object(di, obj_name, start_date, end_date):
 
     # - processing
 
+    data = data.sel(time=slice(start_date, end_date))
     module = methods.tobac_wrapper.Track(data[sel], data[seg], tobac_config, overwrite=overwrite, track_params=modify_parameters)
     tobac_methods = {'detect': True, 'segment': True, 'save': True}
     module.perform(**tobac_methods)

@@ -140,55 +140,53 @@ def make_directories(dirs):
     for d in dirs:
         os.makedirs(d, exist_ok=True)
 
-def get_chunks(data):
-    chunks = {}
-    for dim in data.dims:
-        if dim == "time":
-            chunks[dim] = 1
-        elif dim in ("lat", "lon"):
-            if data.sizes[dim] > 128*2:
-                chunks[dim] = 128
-            else:
-                chunks[dim] = data.sizes[dim]
-        else:
-            chunks[dim] = data.sizes[dim]
-    return chunks
-
-def save_xarray(data, path, encoding={}, engine="h5netcdf"):
-    ''' Save xarray dataset or dataarray with compression and a fill value of 0 (assumes data is label data) '''
-    # encoding
-    chunksizes = []
-    for dim in data.dims:
-        if data.sizes['lat'] < 128*2:
-            chunksizes.append(data.sizes[dim]) # too small to chunk
-        else:
+def get_chunks(dims, sizes=None):
+    if isinstance(dims, xr.DataArray) or isinstance(dims, xr.Dataset):
+        sizes = dims.sizes
+        dims = dims.dims
+        chunks = {}
+        for dim in dims:
             if dim == "time":
-                chunksizes.append(1)
+                chunks[dim] = 1
             elif dim in ("lat", "lon"):
-                chunksizes.append(128)
+                chunks[dim] = min(sizes[dim], 128*2)
             else:
-                chunksizes.append(data.sizes[dim])
-    encoding_params = dict(zlib=True, complevel=4, chunksizes=tuple(chunksizes))
-    encoding_params.update(encoding)
+                chunks[dim] = sizes[dim]
+        return chunks
+    else:
+        chunks = []
+        for dim in dims:
+            if dim == "time":
+                chunks.append(1)
+            elif dim in ("lat", "lon"):
+                chunks.append(min(sizes[dim], 128*2))
+            else:
+                chunks.append(sizes[dim])
+        return tuple(chunks)
+
+def save_xarray(data, path, engine="h5netcdf", fill_value=0):
+    ''' Save xarray dataset or dataarray with compression and a fill value of 0 (assumes data is label data) '''
     # apply and ensure dtype is positive integer (assumes label data)
     if isinstance(data, xr.DataArray):
         if data.name is None:
             data = data.rename("data")
         if not np.issubdtype(data.dtype, np.integer):
             data = data.astype(np.uint32)
+        encoding_params = dict(zlib=True, complevel=4, chunksizes=get_chunks(data.dims, data.sizes))
         encoding = {data.name: encoding_params}
     else:
         encoding = {}
         for var in data.data_vars:
             if not np.issubdtype(data[var].dtype, np.integer):
                 data[var] = data[var].astype(np.uint32)
+            encoding_params = dict(zlib=True, complevel=4, chunksizes=get_chunks(data[var].dims, data[var].sizes))
             encoding[var] = encoding_params
     # atomic write: write to a temporary file and replace
     path = pathlib.Path(path)
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".nc", dir=str(path.parent))
     os.close(tmp_fd)
     try:
-        data.fillna(0).to_netcdf(tmp_path, encoding=encoding, engine=engine)
+        data.fillna(fill_value).to_netcdf(tmp_path, encoding=encoding, engine=engine)
         os.replace(tmp_path, str(path))
     finally:
         # ensure tmp removed if something failed

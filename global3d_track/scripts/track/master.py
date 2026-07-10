@@ -111,9 +111,7 @@ def submit_tracking(script, config, start_date, end_date, hours):
 
     return job_ids
 
-
 #### --------------------------------- ####
-
 
 def submit_many(script, config, start_date, end_date, hours):
     # submit many jobs to cover the time period
@@ -169,19 +167,19 @@ def master(config):
     detect_hours = int(detect_hours)
     track_hours = int(track_hours)
         
-    # detect and segment
-    logging.info(f"{datetime.now()}: sending off detection...")
-    job_ids = submit_detection(submission_files / '_detect_itr.sh', config, start_date, end_date, detect_hours)
-    wait_for_many(job_ids)
+    # # detect and segment
+    # logging.info(f"{datetime.now()}: sending off detection...")
+    # job_ids = submit_detection(submission_files / '_detect_itr.sh', config, start_date, end_date, detect_hours)
+    # wait_for_many(job_ids)
 
-    # track
-    logging.info(f"{datetime.now()}: sending off tracking...")
-    job_ids = submit_tracking(submission_files / '_track_itr.sh', config, start_date, end_date, track_hours)
-    wait_for_many(job_ids)
+    # # track
+    # logging.info(f"{datetime.now()}: sending off tracking...")
+    # job_ids = submit_tracking(submission_files / '_track_itr.sh', config, start_date, end_date, track_hours)
+    # wait_for_many(job_ids)
        
     # post process
     logging.info(f"{datetime.now()}: sending off post-processing...")
-    job_id = submit_job(submission_files / '_post_process.sh', (config, start_date, end_date))
+    job_id = submit_job(submission_files / '_post_process.sh', (config, start_date.strftime("%Y-%m-%d-%H:%M:%S"), end_date.strftime("%Y-%m-%d-%H:%M:%S")))
     wait_for_job(job_id)
 
 

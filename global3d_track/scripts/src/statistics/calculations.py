@@ -7,24 +7,42 @@ import dask
 import xarray as xr
 import numpy as np
 import metpy
+from metpy.units import units
+import logging
 
 # 1. calculate total air density (incl. hydrometeors)
 
-def density(ds):
-    ''' uses ideal gas law to get total (dry and moist) air density '''
+# def moist_and_dry_density(ds):
+#     ''' uses ideal gas law to get total (dry and moist) air density '''
+#     # thermodynamic variables
+#     p = ds.pfull # Pa (kg m-1 s-2)
+#     T = ds.ta # K
+#     Rd = 287.04 # J kg-1 K-1 (m2 s-2 K-1)
+#     Rv = 461.4 # J kg-1 K-1 (m2 s-2 K-1)
+    
+#     # specific vapour
+#     q_v = ds.hus # kg kg-1
+    
+#     # ICON model eqn state gives
+#     q_condensate = ds.cli + ds.clw + ds.qg + ds.qr + ds.qs # kg kg-1
+#     alpha = ((Rv / Rd) - 1) * q_v - q_condensate
+#     rho = p / (Rd * T * (1 + alpha)) # kg m-3
+#     return rho
+
+def dry_density(ds):
+    ''' uses ideal gas law to get dry air density '''
     # thermodynamic variables
     p = ds.pfull # Pa (kg m-1 s-2)
     T = ds.ta # K
     Rd = 287.04 # J kg-1 K-1 (m2 s-2 K-1)
-    Rv = 461.4 # J kg-1 K-1 (m2 s-2 K-1)
-    
-    # specific vapour
-    q_v = ds.hus # kg kg-1
-    
-    # ICON model eqn state gives
-    q_condensate = ds.cli + ds.clw + ds.qg + ds.qr + ds.qs # kg kg-1
-    alpha = ((Rv / Rd) - 1) * q_v - q_condensate
-    rho = p / (Rd * T * (1 + alpha)) # kg m-3
+    # dry density
+    rho = p / (Rd * T) # kg m-3
+    return rho
+
+def density(ds):
+    ''' total air density '''
+    q_d = 1 - ds.hus - ds.cli - ds.clw - ds.qg - ds.qr - ds.qs # kg kg-1
+    rho = dry_density(ds) / q_d # kg m-3
     return rho
 
 # 2. get condensate concentrations and paths
@@ -160,26 +178,43 @@ class CMF:
     
     def mass_transport(self, velocity, density, quantities=None):
         ''' calculate total mass transport (kg s-1) for a given velocity and density field, and optional quantity (e.g., liquid water content) to weight by. '''
-        area = (velocity>0).sum(('lat','lon'), skipna=True) * self.grid_area # m2
         mass_flux = self.mass_flux(velocity, density, quantities) # kg s-1 m-2
-        return mass_flux.mean(('lat','lon')) * area # kg s-1
+        return mass_flux.sum(('lat','lon')) * self.grid_area # kg s-1
 
 # 5. CAPE / CIN
     
 def cape_cin_per_column(p, T, rh):
-    # ensure units
-    p = p  * metpy.units.Pa
-    T = T * metpy.units.kelvin
-    rh = rh * metpy.units.dimensionless
-    # calculations
+    if np.isfinite(p).sum() < 5:
+        return np.nan, np.nan
+
+    mask = np.isfinite(p) & np.isfinite(T) & np.isfinite(rh)
+    p = p[mask] * units.Pa
+    T = T[mask] * units.kelvin
+    rh = rh[mask] * units.dimensionless
     Td = metpy.calc.dewpoint_from_relative_humidity(T, rh)
-    prof = metpy.calc.parcel_profile(p, T[0], Td[0])
-    cape, cin = metpy.calc.cape_cin(p, T, Td, prof)
-    return cape.magnitude, cin.magnitude
+
+    try:
+        prof = metpy.calc.parcel_profile(p, T[0], Td[0])
+    except ValueError:
+        logging.warning(
+            "Parcel profile calculation failed; retrying with pressures above 100 hPa."
+        )
+        mask = p >= (100 * units.hPa)
+        p = p[mask]
+        T = T[mask]
+        rh = rh[mask]
+        Td = metpy.calc.dewpoint_from_relative_humidity(T, rh)
+        prof = metpy.calc.parcel_profile(p, T[0], Td[0])
+
+    try:
+        cape, cin = metpy.calc.cape_cin(p, T, Td, prof)
+        return cape.magnitude, cin.magnitude
+    except ValueError:
+        return np.nan, np.nan
 
 def cape_cin(data, return_humidity=False):
 
-    data = data.sel(level_full=data.level_full[::-1]) # force pressure increasing
+    data = data.sel(level_full=data.level_full[::-1]).load() # force pressure increasing
 
     p = data.pfull # pressure
     T = data.ta # temperature
@@ -193,7 +228,6 @@ def cape_cin(data, return_humidity=False):
         input_core_dims=[["level_full"], ["level_full"], ["level_full"]],
         output_core_dims=[[], []],
         vectorize=True,
-        dask="parallelized",
         output_dtypes=[float, float],
     )
 

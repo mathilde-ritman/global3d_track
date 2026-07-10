@@ -4,9 +4,9 @@
 # University of Oxford
 
 #SBATCH --job-name=detect_itr
-#SBATCH --partition=compute
+#SBATCH --partition=shared
 #SBATCH --time=01:00:00
-#SBATCH --mem=200GB
+#SBATCH --mem=100GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 
@@ -15,8 +15,14 @@
 
 # Trpoics:
 # [1H, 100GB, shared] OOM kill at data load
- # [1H, 100GB, compute]
+# [1H, 100GB, compute] OOM kill at data load
+# [1H, 200GB, compute] done, took ~40 mins per 4 hours of data
 
+# Maor [starting from 12PM]:
+# [1H, 100GB, shared] took 15 mins to complete
+
+# Maor [full 36 hours]:
+# [1H, 100GB, shared]
 
 module load python3 
 source /home/b/b382635/.bashrc

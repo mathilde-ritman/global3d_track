@@ -1,0 +1,28 @@
+# config to perform customised tracking
+
+
+overwrite: 0
+restart_checkpoints: 0
+
+data_directory: /work/bb1153/b382635/data/final_tracks
+results_directory: /work/bb1153/b382635/data/track_statistics
+
+region: tropics
+version_name: dcc_frozen_1e4
+
+start_date: '2021-07-01 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+end_date: '2021-07-03 00:00:00' # [ALSO NEEDS SETTING IN .SH]
+
+# which sets of statistics would you like to calculate
+results:
+  grl_stats:
+    name: grl_stats
+    shortname: grl
+    function: GRLStats
+    parameters:
+
+# for system-wise analysis
+batch_system: 1 # number of systems to process at once
+system_wise_version: 'grl' # sets results directory and how to filter valid systems
+max_system_size: 2000 # (pixels) maximum size of a system to process
+start_idx: 200 # (cloud number) where to start from

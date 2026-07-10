@@ -91,8 +91,10 @@ class Link:
     def __init__(self):
         pass
 
-    def link_files(self, di, files, fname_suffix):
+    def link_files(self, di, files, fname_suffix, last_completed_file=None):
         logging.info(f"{datetime.now()} Linking tracks across time...")
+
+        overwrite = di['post_processing'].get('overwrite_linking', False)
 
         if len(files) < 2:
             logging.warning(f"Not enough files to link, skipping.")
@@ -101,11 +103,25 @@ class Link:
         # load current
         current_file = files.pop(0)
         current_mask = xr.open_dataset(current_file)
-        current_record = None
         files_remaining = len(files)
 
+        # if not last_completed_file is None:
+        #     current_file = last_completed_file
+        #     current_mask = xr.open_dataset(current_file)
+        #     existing_records = list(pathlib.Path(current_file).glob(f"{pathlib.Path(current_file).stem}_linked_*_maps.h5"))
+        #     if not existing_records:
+        #         logging.warning(f"No existing mapping records found for {current_file}, exiting...")
+        #         return
+        #     # continue
+        #     records = {}
+        #     for rec in existing_records:
+        #         lab = rec.stem.split('_linked_')[1].split('_maps')[0]
+        #         if lab in di['post_processing']['link_variables']:
+        #             records[lab] = pd.read_hdf(rec, 'table')
+        #     files_remaining = len(files) + 1
+
         # variables and methods
-        temp = di['post_processing']['link_results']
+        temp = di['post_processing']['link_variables']
         methods = {}
         for lab, method in temp.items():
             if lab not in current_mask.data_vars:
@@ -116,6 +132,9 @@ class Link:
                 methods[lab] = method
             if isinstance(method, float):
                 methods[lab] = {'method':'erode', 'erode_by': method}
+
+        # record keeping
+        records = {lab: (None, None) for lab in methods.keys()} # of the mappings performed for each variable
 
         while files_remaining:
             # load next mask
@@ -128,28 +147,37 @@ class Link:
                 if isinstance(method, dict):
                     params = {k:v for k,v in method.items() if k != 'method'}
                     method = method['method']
+                current_record, next_record = records[lab]
                 current_mask, next_mask, current_record, next_record = self.link_tracks(current_mask, next_mask, variable=lab, method=method, params=params, current_record=current_record)
+                records[lab] = current_record, next_record
                 logging.info(f"{datetime.now()} done for variable: {lab}")
             # save
             logging.info(f"{datetime.now()} saving...")
             fpath = pathlib.Path(current_file)
-            record_path = fpath.with_name(f"{fpath.stem}linking_label_mapping.h5")
             data_path = fpath.with_name(f"{fpath.stem}{fname_suffix}{fpath.suffix}")
-            current_record.to_hdf(record_path, 'table')
-            utils.tools.save_xarray(current_mask, data_path)
-            logging.info(f"{datetime.now()} saved to {data_path}")
+            if os.path.exists(data_path) and not overwrite:
+                logging.warning(f"{datetime.now()} {data_path} already exists, skipping saving...")
+            else:
+                for lab in records.keys():
+                    current_record, _ = records[lab]
+                    record_path = fpath.with_name(f"{fpath.stem}_linked_{lab}_maps.h5")
+                    current_record.to_hdf(record_path, 'table')
+                utils.tools.save_xarray(current_mask, data_path)
+                logging.info(f"{datetime.now()} saved to {data_path}")
             # iterate
             current_file = next_file
             current_mask = next_mask
-            current_record = next_record
+            records = {lab: (records[lab][1], None) for lab in records.keys()}
             files_remaining = len(files)
 
         # save final
         logging.info(f"{datetime.now()} saving...")
         fpath = pathlib.Path(next_file)
-        record_path = fpath.with_name(f"{fpath.stem}linking_label_mapping.h5")
+        for lab in records.keys():
+                current_record, _ = records[lab]
+                record_path = fpath.with_name(f"{fpath.stem}_linked_{lab}_maps.h5")
+                current_record.to_hdf(record_path, 'table')
         data_path = fpath.with_name(f"{fpath.stem}{fname_suffix}{fpath.suffix}")
-        current_record.to_hdf(record_path, 'table')
         utils.tools.save_xarray(next_mask, data_path)
         logging.info(f"{datetime.now()} saved to {data_path}")
 
@@ -158,6 +186,10 @@ class Link:
         if not method in ['connect','erode']:
             logging.warning(f"method {method} not recognised, defaulting to 'connect'")
             method = 'connect'
+
+        # shift second mask
+        shift = first[variable].max()
+        next[variable] = (next[variable] + shift).where(next[variable] > 0, 0) 
 
         # link using the adjacent times
         da_t1 = first[variable].isel(time=-1)
@@ -188,21 +220,14 @@ class Link:
         # df3[variable, track_labels_new]: (next -> shared)
         # df4[track_labels, track_labels_new]: (shared -> next -> shared) collects many-to-one changes that result from the adjacent tracking
 
-        # logging.info(f"{df1=}")
-        # logging.info(f"{df2=}")
-        # logging.info(f"{df3=}")
-        # logging.info(f"{df4=}")
-
         # 3. derive the mappings to actulaly use that capture all the above information
-        # first mask
-        # df_first = pd.DataFrame({variable: df2[variable]}) # start with the input
-
         df_first = df2.merge(df1, left_on=f'{variable}_new', right_on=f'{variable}_new', how='left')
         df_first = df_first.merge(df4, left_on='track_labels', right_on='track_labels', how='left')
         df_first['track_labels_new'] = df_first['track_labels_new'].fillna(0)
         df_first.loc[df_first['track_labels_new']==0, 'track_labels_new'] = df_first['track_labels']
-        map_shared_to_first = df1.set_index('track_labels')[f'{variable}_new']
-        df_first[f'{variable}_linked'] = df_first['track_labels_new'].map(map_shared_to_first).fillna(0).astype(int)
+        reverse_many_to_one = df1[f'{variable}_new'].map(df1.set_index('track_labels')[f'{variable}_new'])
+        one_to_many_to_one = reverse_many_to_one.where(reverse_many_to_one>0, df1[f'{variable}_new'])
+        df_first[f'{variable}_linked'] = df_first['track_labels_new'].map(one_to_many_to_one).fillna(0).astype(int)
         df_first = df_first[[variable, f'{variable}_linked']].drop_duplicates()
         df_first = self.expand_mappings(df_first, first[variable], variable, f'{variable}_linked').fillna(0) # expand to full datasets
 
@@ -215,34 +240,16 @@ class Link:
         df_next = self.expand_mappings(df_next, next[variable], variable, f'{variable}_linked').fillna(0)
         
         # 4. apply the results
+        # df_first = self.clean_mappings(df_first, variable, f'{variable}_linked')
+        # df_next = self.clean_mappings(df_next, variable, f'{variable}_linked')
         first[variable] = methods.ShareLabels().apply_mapping(first, df_first, variable, f'{variable}_linked')
         next[variable] = methods.ShareLabels().apply_mapping(next, df_next, variable, f'{variable}_linked')
-        
-
-        # df1 = self.find_mappings(ShareLabels, return_extra_mappings=True)
-        # # b. map labels from current to the adjacent tracks, this finds the desired label numbers
-        # df2 = self.find_mappings(tracked.isel(time=0), da_t1, 'track_labels', f'{variable}_linked')
-        # # c. map results (1) -> (2)
-        # mapping = dict(zip(df2['track_labels'], df2[f'{variable}_linked']))
-        # df1[f'{variable}_linked'] = df1['track_labels'].map(mapping)
-        # # d. make sure all labels are included in the mapping
-        # df_first = self.expand_mappings(df1, first[variable], variable, f'{variable}_linked')[[variable, f'{variable}_linked']]
-        # # e. apply
-        # first[variable] = methods.ShareLabels().apply_mapping(first, df_first, variable, f'{variable}_linked')
-
-        # # derive and apply mappings for next mask
-        # df3 = self.find_mappings(da_t2, tracked.isel(time=1), variable, f'track_labels')
-        # df3[f'{variable}_linked'] = df3['track_labels'].map(mapping)
-        # shift_value = df3[f'{variable}_linked'].max() + 1 # value to shift by for new features
-        # new_features = (df3['track_labels']+shift_value).where(df3['track_labels']>0, 0)
-        # df3[f'{variable}_linked'] = df3[f'{variable}_linked'].where(df3[f'{variable}_linked']>0, new_features)
-        # df_next = self.expand_mappings(df3, next[variable], variable, f'{variable}_linked')[[variable, f'{variable}_linked']] # make sure all labels are included in the mapping
-        # next[variable] = methods.ShareLabels().apply_mapping(next, df_next, variable, f'{variable}_linked') # apply
         
         # record keeping, update the record for 'first' if a past record of mappings has been provided
         if current_record is not None:
             # update record keeping with the past mappings that were applied to current mask
-            df_first = df_first.rename(columns={df_first.columns[0]: f'{variable}_secondary'})
+            df_first = df_first.rename(columns={variable: f'{variable}_secondary',
+                                                f'{variable}_linked': f'{variable}_linked_secondary'})
             # concat them together, keeping all record columns
             df_first = pd.concat([current_record, df_first], axis=1)
 
@@ -272,3 +279,14 @@ class Link:
             missing_df = pd.DataFrame({current_col: list(missing), update_col: list(missing)})
             df = pd.concat([df, missing_df], ignore_index=True)
         return df
+
+    def clean_mappings(self, df, current_col, update_col):
+        # remove any mappings that are not one-to-one, replace the update value with the minimum of the update values for each current value
+        counts = df.groupby(current_col)[update_col].nunique()
+        non_one_to_one = counts[counts > 1].index
+        df_cleaned = df[~df[current_col].isin(non_one_to_one)].copy()
+        for val in non_one_to_one:
+            min_update = df[df[current_col] == val][update_col].min()
+            di = {current_col: val, update_col: min_update}
+            df_cleaned = pd.concat([df_cleaned, pd.DataFrame(di, index=[0])], ignore_index=True)
+        return df_cleaned

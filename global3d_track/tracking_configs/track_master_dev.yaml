@@ -8,9 +8,9 @@
 #### -------------- global settings ------------------- ####
 
 # for the current run, whether to overwrite existing data or checkpoints
-overwrite: 1
+overwrite: 0
 overwrite_tobac: 0 # use this if you want to overwrite the other tracking steps but don't need to redo the toback linking
-restart_checkpoints: 1
+restart_checkpoints: 0
 
 # set output directories
 data_directory: /work/bb1153/b382635/data/final_tracks
@@ -81,10 +81,10 @@ multivariate:
 #### ---------------- post processing options ----------------- ####
 
 post_processing:
-  link_results:
-    ice: False
+  link_files: True
+  link_variables:
+    system: connect
     updraft: connect
-    system: 0.5 # erode
   filter_tracks: True # whether to determine track validity
 
 # post_processing:

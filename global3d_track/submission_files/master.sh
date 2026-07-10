@@ -18,7 +18,8 @@ source activate hackathon_env
 # yaml=/home/b/b382635/s/global3d_track/global3d_track/tracking_configs/track_master_high_res.yaml
 # yaml=/home/b/b382635/s/my_notebooks/CSU/tracking_configs/track_master.yaml
 yaml=/home/b/b382635/s/my_notebooks/model_paper/grl_submission/tracking_configs/track_master.yaml
-# yaml=/home/b/b382635/s/my_notebooks/model_paper/grl_submission/tracking_configs/track_master_no_ec.yaml
+# yaml=/home/b/b382635/s/my_notebooks/Maor/track_master.yaml
+# yaml=/home/b/b382635/s/my_notebooks/dataset_paper/acp_submission/scripts/global3d_track/tracking_configs/track_master_rev.yaml
 
 # yaml=/home/b/b382635/s/global3d_track/global3d_track/tracking_configs/track_master_dev.yaml
 
