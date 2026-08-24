@@ -37,10 +37,12 @@ def track_object(di, obj_name, start_date, end_date):
     overwrite, overwrite_tobac, restart_checkpoints = di['overwrite'], di.get('overwrite_tobac', di['overwrite']), di['restart_checkpoints']
 
     # directories
+    datestr = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
     tobac_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date, use_tobac_version=True))
-    data_dir = Path(di['data_directory'], utils.tools.version_name(di, start_date=start_date))
+    data_dir = Path(di['data_directory'], utils.tools.version_name(di, datestr=datestr))
     if di['checkpoint_directory'] is not None:
-        check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, start_date=start_date))
+        check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, datestr=datestr))
+        # check_dir = Path(di['checkpoint_directory'], utils.tools.version_name(di, start_date=start_date))
     else:
         check_dir = None
     
@@ -58,10 +60,9 @@ def track_object(di, obj_name, start_date, end_date):
     inner_checkpoint = dict(checkpoint=(checkpoint if di.get('inner_checkpoint', False) else None), checkpoint_name=n, check_n=di.get('topography_check_n', None))
 
     # output paths
-    datetime_range = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
-    final_tracks_path = Path(data_dir) / f"{datetime_range}_{name}_tracks.nc"
+    final_tracks_path = Path(data_dir) / f"{name}_tracks.nc"
     tobac_table_path = Path(tobac_dir) / f'{name}/tracked_features.h5' # record of tracked cells (this gets created after the tobac tracking completes)
-    table_path = Path(data_dir) / f"{datetime_range}_{name}_tracks.h5" # file to which the subsequent tracking results should be added
+    table_path = Path(data_dir) / f"{name}_tracks.h5" # file to which the subsequent tracking results should be added
 
     # - what tracking are we doing?
 
@@ -82,7 +83,7 @@ def track_object(di, obj_name, start_date, end_date):
         return track_mask
     
     if check_dir is not None and (check_dir / f'{n}final_tracks.nc').exists() and not (overwrite or restart_checkpoints):
-        logging.info(f"{datetime.now()} loaded {name} tracks from checkpoint...")
+        logging.info(f"{datetime.now()} loaded {name} tracks from {check_dir / n}final_tracks.nc...")
         track_mask = xr.open_dataset(check_dir / f'{n}final_tracks.nc')
         return track_mask
 
@@ -220,7 +221,8 @@ def perform(yaml_file, start_date, end_date):
     variables_to_track = di['objects'].keys()
 
     # directories
-    version_name = utils.tools.version_name(di, start_date=start_date)
+    datestr = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
+    version_name = utils.tools.version_name(di, datestr=datestr)
     data_dir = Path(di['data_directory'], version_name)
     if di['checkpoint_directory'] is not None:
         check_dir = Path(di['checkpoint_directory'], version_name)
@@ -233,9 +235,8 @@ def perform(yaml_file, start_date, end_date):
     checkpoint = Checkpoint(check_dir, overwrite=restart_checkpoints) # define class
 
     # output paths
-    datetime_range = f"{start_date.strftime('%Y%m%dT%H%M')}_{end_date.strftime('%Y%m%dT%H%M')}"
-    tracks_record_path = data_dir / f"{datetime_range}_system_label_maps.h5"
-    final_tracks_path = data_dir / f"{datetime_range}_system_tracks.nc"
+    tracks_record_path = data_dir / f"system_label_maps.h5"
+    final_tracks_path = data_dir / f"system_tracks.nc"
 
     # - done already?!
         
@@ -309,7 +310,7 @@ def perform(yaml_file, start_date, end_date):
     # remove the individual masks
     for variable in variables_to_track:
         variable_name = di['objects'][variable]['name'] # choices for variable being tracked
-        file_path = Path(data_dir) / f"{datetime_range}_{variable_name}_tracks.nc"
+        file_path = Path(data_dir) / f"{variable_name}_tracks.nc"
         file_path.unlink(missing_ok=True)
 
     logging.info(f"{datetime.now()} Saved result to {final_tracks_path}.")

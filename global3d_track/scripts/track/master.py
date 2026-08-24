@@ -167,12 +167,12 @@ def master(config):
     detect_hours = int(detect_hours)
     track_hours = int(track_hours)
         
-    # # detect and segment
+    # detect and segment
     # logging.info(f"{datetime.now()}: sending off detection...")
     # job_ids = submit_detection(submission_files / '_detect_itr.sh', config, start_date, end_date, detect_hours)
     # wait_for_many(job_ids)
 
-    # # track
+    # track
     # logging.info(f"{datetime.now()}: sending off tracking...")
     # job_ids = submit_tracking(submission_files / '_track_itr.sh', config, start_date, end_date, track_hours)
     # wait_for_many(job_ids)

@@ -86,10 +86,11 @@ def load_yaml(yaml_file):
         di = yaml.safe_load(f)
     return di
 
-def version_name(yaml, use_tobac_version=False, start_date=None):
-    if start_date is None:
-        start_date = datetime.strptime(yaml['start_date'], "%Y-%m-%d %H:%M:%S")
-    datestr = start_date.strftime('%Y%m%d')
+def version_name(yaml, use_tobac_version=False, start_date=None, datestr=None):
+    if datestr is None:
+        if start_date is None:
+            start_date = datetime.strptime(yaml['start_date'], "%Y-%m-%d %H:%M:%S")
+        datestr = start_date.strftime('%Y%m%d')
     if not use_tobac_version:
         name = pathlib.Path(yaml['version_name'], yaml['region'], datestr)
     else:
@@ -195,3 +196,91 @@ def save_xarray(data, path, engine="h5netcdf", fill_value=0):
                 os.remove(tmp_path)
             except Exception:
                 pass
+
+#### load records ####
+            
+
+def load_single_record(rundir, tbcdir=None):
+    ''' Collects the tracking record keeping. Only inlude tbcdir if this fails. '''
+
+    # load track records for the day
+    updrafts = pd.read_hdf(list(rundir.glob('*updraft_tracks.h5'))[0], 'table').rename(columns={'tracks':'updraft'})
+    clouds = pd.read_hdf(list(rundir.glob('*frozen_tracks.h5'))[0], 'table').rename(columns={'tracks':'frozen'})
+    
+    if tbcdir:
+        tbc_updrafts = pd.read_hdf(tbcdir / 'updraft/tracked_features.h5','table')
+        updrafts = tbc_updrafts.merge(updrafts, left_on='cell', right_on='cell', how='left')
+        tbc_clouds = pd.read_hdf(tbcdir / 'frozen/tracked_features.h5','table')
+        clouds = tbc_clouds.merge(clouds, left_on='cell', right_on='cell', how='left')
+        
+    # load overall system maps
+    system_umaps = pd.read_hdf(list(rundir.glob('*system_label_maps.h5'))[0], 'table') # maps: updraft -> anvil
+    system_amaps = pd.read_hdf(list(rundir.glob('*system_extra_maps.h5'))[0], 'table').rename(columns={'frozen_new':'dcc'}) # maps: anvil -> DCC
+    system_maps = system_umaps.merge(system_amaps, left_on='frozen', right_on='frozen', how='left').fillna(0) # maps: updraft ->  anvil -> dcc
+    
+    # merge variable records with overall tracking results
+    updrafts = updrafts.merge(system_maps[['updraft','dcc']], left_on='updraft', right_on='updraft', how='left').fillna(0)
+    clouds = clouds.merge(system_maps[['frozen','dcc']], left_on='frozen', right_on='frozen', how='left').fillna(0)
+    dcc_times = pd.concat((updrafts[['time','dcc','updraft']], clouds[['time','dcc',]])).fillna(0)
+
+    return {'w':updrafts, 'cld':clouds, 'df':dcc_times}
+
+''' Collects the tracking record keeping, like above, but for tracked datasets that span multiple days and have been linked up. '''
+    
+def collect_link_maps(link_maps, var, new_name):
+    flag = 0
+    for col in link_maps.columns:
+        if 'secondary' in col:
+            flag = 1
+    if flag:
+        link_maps = link_maps[[var,f'{var}_linked']].merge(link_maps[[f'{var}_secondary',f'{var}_linked_secondary']], left_on=f'{var}_linked', right_on=f'{var}_secondary', how='left').fillna(0)
+        link_maps = link_maps.drop(columns=[f'{var}_linked',f'{var}_secondary']).rename(columns={var:new_name,f'{var}_linked_secondary':f'{new_name}_linked'})
+    else:
+        link_maps = link_maps.rename(columns={var:new_name,f'{var}_linked':f'{new_name}_linked'})
+    return link_maps
+
+def apply_linking(df, link_maps, var='dcc'):
+    shift_val = link_maps[var].where(link_maps[var]>0).min() - 1
+    df[var] = (df[var] + shift_val).where(df[var] > 0, 0)
+    return df.merge(link_maps, left_on=var, right_on=var, how='left')
+
+def load_records(track_dir, day, tbcdir=None):
+    # load track records for the day
+    updrafts = pd.read_hdf(list(track_dir.glob('%s/*updraft_tracks.h5' %day))[0], 'table').rename(columns={'tracks':'updraft'})
+    clouds = pd.read_hdf(list(track_dir.glob('%s/*frozen_tracks.h5' %day))[0], 'table').rename(columns={'tracks':'frozen'})
+    if tbcdir:
+        tbc_updrafts = pd.read_hdf(tbcdir / 'updraft/tracked_features.h5','table')
+        updrafts = tbc_updrafts.merge(updrafts, left_on='cell', right_on='cell', how='left')
+        tbc_clouds = pd.read_hdf(tbcdir / 'frozen/tracked_features.h5','table')
+        clouds = tbc_clouds.merge(clouds, left_on='cell', right_on='cell', how='left')
+    # load overall system maps
+    system_umaps = pd.read_hdf(list(track_dir.glob('%s/*system_label_maps.h5' %day))[0], 'table') # maps: updraft -> anvil
+    system_amaps = pd.read_hdf(list(track_dir.glob('%s/*system_extra_maps.h5' %day))[0], 'table').rename(columns={'frozen_new':'dcc'}) # maps: anvil -> DCC
+    system_maps = system_umaps.merge(system_amaps, left_on='frozen', right_on='frozen', how='left').fillna(0) # maps: updraft ->  anvil -> dcc
+    # merge variable records with overall tracking results
+    updrafts = updrafts.merge(system_maps[['updraft','dcc']], left_on='updraft', right_on='updraft', how='left').fillna(0)
+    clouds = clouds.merge(system_maps[['frozen','dcc']], left_on='frozen', right_on='frozen', how='left').fillna(0)
+    # load linking
+    link_maps = pd.read_hdf(list(track_dir.glob('%s/*linked_system_maps.h5' %day))[0], 'table')
+    updraft_maps = pd.read_hdf(list(track_dir.glob('%s/*linked_u_tracks_maps.h5' %day))[0], 'table')
+    link_maps = collect_link_maps(link_maps, 'system', 'dcc')
+    updraft_maps = collect_link_maps(updraft_maps, 'u_tracks', 'updraft')
+    # link the updrafts in time
+    updrafts = apply_linking(updrafts, updraft_maps, var='updraft')    
+    # link the overall results in time
+    updrafts = apply_linking(updrafts, link_maps, 'dcc')
+    clouds = apply_linking(clouds, link_maps, 'dcc')
+    # return
+    updrafts = updrafts.rename(columns={'dcc':'dcc_daily','dcc_linked':'dcc','updraft':'updraft_daily','updraft_linked':'updraft'})
+    clouds = clouds.rename(columns={'dcc':'dcc_daily','dcc_linked':'dcc'})
+    return {'w':updrafts, 'cld':clouds}
+
+def load_linked_records(track_dir, days, tbcdir=None):
+    updrafts = None
+    clouds = None
+    for d in days:
+        di = load_records(track_dir, d, tbcdir)
+        updrafts = pd.concat((updrafts, di['w']))
+        clouds = pd.concat((clouds, di['cld']))
+    dcc_times = pd.concat((updrafts[['time','dcc','updraft']], clouds[['time','dcc',]]))
+    return {'w':updrafts, 'cld':clouds, 'df':dcc_times}

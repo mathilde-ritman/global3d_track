@@ -5,12 +5,21 @@
 
 #SBATCH --job-name=track_itr
 #SBATCH --partition=compute
-#SBATCH --time=04:30:00
-#SBATCH --mem=250GB
+#SBATCH --time=01:00:00
+#SBATCH --mem=500GB
 #SBATCH --nodes=1
-#SBATCH --ntasks=64
+#SBATCH --ntasks=1
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/track/job.o%j
+
+# CSU 5km:
+# [2H, 200GB, 1node, 64tasks, 1cpuptask] OOM before save of tracking
+# [2H, 400GB, 1node, 64tasks, 1cpuptask] Could not allocate 106. GiB to save data
+# [2H, 400GB, 1node, 64tasks, 1cpuptask] Ran for 12H instead, finished tobac, OOM at contiguity
+# [2H, 400GB, 1node, 1tasks, 1cpuptask] done for updrafts! :-) working on topography!
+# [2H, 400GB, 1node, 1tasks, 1cpuptask] fail on share labels final
+# [6H, 350GB, 1node, 1tasks, 1cpuptask] fail on force consecutive
+# [4H, 400GB, 1node, 1tasks, 1cpuptask] 
 
 # Amazon:
 # takes 1hr - 1hr40min to run 1 day over the Amazon. No issues at 250 GB.

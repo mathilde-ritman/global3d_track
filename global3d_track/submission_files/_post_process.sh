@@ -5,8 +5,8 @@
 
 #SBATCH --job-name=proc
 #SBATCH --partition=compute
-#SBATCH --time=04:00:00
-#SBATCH --mem=300GB
+#SBATCH --time=01:30:00
+#SBATCH --mem=400GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/proc/job.o%j
 

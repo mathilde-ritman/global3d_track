@@ -12,23 +12,6 @@ import logging
 
 # 1. calculate total air density (incl. hydrometeors)
 
-# def moist_and_dry_density(ds):
-#     ''' uses ideal gas law to get total (dry and moist) air density '''
-#     # thermodynamic variables
-#     p = ds.pfull # Pa (kg m-1 s-2)
-#     T = ds.ta # K
-#     Rd = 287.04 # J kg-1 K-1 (m2 s-2 K-1)
-#     Rv = 461.4 # J kg-1 K-1 (m2 s-2 K-1)
-    
-#     # specific vapour
-#     q_v = ds.hus # kg kg-1
-    
-#     # ICON model eqn state gives
-#     q_condensate = ds.cli + ds.clw + ds.qg + ds.qr + ds.qs # kg kg-1
-#     alpha = ((Rv / Rd) - 1) * q_v - q_condensate
-#     rho = p / (Rd * T * (1 + alpha)) # kg m-3
-#     return rho
-
 def dry_density(ds):
     ''' uses ideal gas law to get dry air density '''
     # thermodynamic variables
@@ -39,29 +22,43 @@ def dry_density(ds):
     rho = p / (Rd * T) # kg m-3
     return rho
 
-def density(ds):
-    ''' total air density '''
-    q_d = 1 - ds.hus - ds.cli - ds.clw - ds.qg - ds.qr - ds.qs # kg kg-1
+def moist_air_density(ds, output='10km'):
+    ''' total dry and moist air density '''
+    p = ds.pfull # Pa (kg m-1 s-2)
+    T = ds.ta # K
+    Rd = 287.04 # J kg-1 K-1
+    Rv = 461.4 # J kg-1 K-1
+    e = vapour_pressure(ds) # Pa
+    # total dry + moist air density
+    rho = (e / (Rv * T)) + ((p - e) / (Rd * T)) # kg m-3
+    return rho
+
+def density(ds, output='10km'):
+    ''' total air and condensate density '''
+    if output == '5km':
+        q_d = 1 - ds.hus - ds.qall # kg kg-1
+    elif output == '10km':
+        q_d = 1 - ds.hus - ds.cli - ds.clw - ds.qg - ds.qr - ds.qs # kg kg-1
     rho = dry_density(ds) / q_d # kg m-3
     return rho
 
 # 2. get condensate concentrations and paths
 
-def xWC(ds, v='cli'):
+def xWC(ds, v='cli', output='10km'):
     # total air density
-    rho = density(ds) # kg m-3
+    rho = density(ds, output) # kg m-3
     # specific mass fractions - mass of quantity per mass of total air
     q_x = ds[v] # kg kg-1
     # density of quantity (e.g., liquid water content)
     rho_x = q_x * rho # kg m-3
     return rho_x
 
-def xWP(ds, v='cli'):
+def xWP(ds, v='cli', output='10km', zdim='level_full'):
     # density of quantity
-    rho_x = xWC(ds, v) # kg m-3
+    rho_x = xWC(ds, v, output) # kg m-3
     # total mass per tropospheric column of air (e.g., liquid water path)
     grid_depth = ds.dzghalf # m
-    xWP = (rho_x * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
+    xWP = (rho_x * grid_depth).sum(zdim) # kg m-2
     return xWP
 
 def IWC(ds, return_density=False):
@@ -74,16 +71,25 @@ def IWC(ds, return_density=False):
         return rho_frozen, rho
     return rho_frozen
 
-def IWP(ds, return_iwc=False):
+def IWP(ds, return_iwc=False, zdim='level_full'):
     ''' calculate ice water path from frozen hydrometeors: ice, snow and graupel '''
     # densities
     rho_frozen = IWC(ds) # kg m-3
     # iwp
     grid_depth = ds.dzghalf # m
-    IWP = (rho_frozen * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
+    IWP = (rho_frozen * grid_depth).sum(zdim) # kg m-2
     if return_iwc:
         return IWP, rho_frozen
     return IWP
+
+def TWC(ds, return_density=False):
+    ''' calculate total water content from all hydrometeors: ice, snow, graupel, rain and cloud liquid '''
+    q_condensate = ds['cli'] + ds['qs'] + ds['qg'] + ds['qr'] + ds['clw'] # kg kg-1
+    rho = density(ds)
+    rho_condensate = rho * q_condensate # kg m-3
+    if return_density:
+        return rho_condensate, rho
+    return rho_condensate
 
 def TWP(ds, return_twc=False):
     ''' calculate ice water path from frozen hydrometeors: ice, snow and graupel '''
@@ -92,7 +98,7 @@ def TWP(ds, return_twc=False):
     rho_condensate = density(ds) * q_condensate # kg m-3
     # iwp
     grid_depth = ds.dzghalf # m
-    TWP = (rho_condensate * grid_depth).sel(level_full=slice(23,90)).sum('level_full') # kg m-2
+    TWP = (rho_condensate * grid_depth).sum('level_full') # kg m-2
     if return_twc:
         return TWP, rho_condensate
     return TWP
@@ -212,25 +218,107 @@ def cape_cin_per_column(p, T, rh):
     except ValueError:
         return np.nan, np.nan
 
-def cape_cin(data, return_humidity=False):
+def profile_quantities_per_column(p, T, Td):
+    if np.isfinite(p).sum() < 5:
+        return np.nan, np.nan, np.nan, np.nan
+    p = p * units.Pa
+    T = T * units.kelvin
+    Td = Td * units.kelvin
+    prof = metpy.calc.parcel_profile(p, T[0], Td[0])
+    lfc, _ = metpy.calc.lfc(p, T, Td, prof)
+    lcl, _ = metpy.calc.lcl(p[0], T[0], Td[0])
+    cape, cin = metpy.calc.cape_cin(p, T, Td, prof)
+    return cape.magnitude, cin.magnitude, lfc.magnitude, lcl.magnitude
 
-    data = data.sel(level_full=data.level_full[::-1]).load() # force pressure increasing
+def profile_quantities(p, T, rh, zdim='level_full'):
+    ''' returns (CAPE, CIN, LFC, LCL) '''
 
-    p = data.pfull # pressure
-    T = data.ta # temperature
-    rh = relative_humidity(data) # relative humidity
+    # reverse zdim if pressure increases with z
+    if p[zdim].diff(zdim).mean() > 0:
+        p = p.sel({zdim: p[zdim][::-1]})
+        T = T.sel({zdim: T[zdim][::-1]})
+        rh = rh.sel({zdim: rh[zdim][::-1]})
 
-    cape, cin = xr.apply_ufunc(
-        cape_cin_per_column,
-        p,
-        T,
-        rh,
-        input_core_dims=[["level_full"], ["level_full"], ["level_full"]],
-        output_core_dims=[[], []],
+    Td = metpy.calc.dewpoint_from_relative_humidity(T * units.kelvin, rh * units.dimensionless)
+    Td = xr.DataArray(Td.data.to(units.kelvin), coords=T.coords).metpy.dequantify()
+    
+    return xr.apply_ufunc(
+            profile_quantities_per_column,
+            p,
+            T,
+            Td,
+            input_core_dims=[[zdim],[zdim],[zdim]],
+            output_core_dims=[[], [], [], []],
+            vectorize=True,
+        )
+
+def wind_shear(data, z0, z1, zdim='level_full'):
+    idx0 = np.abs(data.zg - z0*1e3).idxmin(zdim)
+    idx1 = np.abs(data.zg - z1*1e3).idxmin(zdim)
+    bottom = data.sel({zdim: idx0})
+    top = data.sel({zdim: idx1})
+    bulk_shear = np.sqrt((top.ua - bottom.ua)**2 + (top.va - bottom.va)**2)
+    return bulk_shear
+
+def dxdy(X, Y, dim="level_full"):
+    def gradient_1d(x, y):
+        return np.gradient(x, y, edge_order=2)
+
+    return xr.apply_ufunc(
+        gradient_1d,
+        X,
+        Y,
+        input_core_dims=[[dim], [dim]],
+        output_core_dims=[[dim]],
         vectorize=True,
-        output_dtypes=[float, float],
+        dask="parallelized",
+        output_dtypes=[np.result_type(X.dtype, Y.dtype)],
     )
 
-    if return_humidity:
-        return cape, cin, rh.metpy.dequantify()
-    return cape, cin
+def static_stability(T, p, zdim='level_full'):
+    ''' calculate static stability (T/theta dtheta/dp) in K/Pa '''
+    p = p * units.Pa
+    T = T * units.kelvin
+    theta = metpy.calc.potential_temperature(p, T)
+    theta = theta.copy(data=theta.data.magnitude)
+    S = (T / theta) * dxdy(theta, p.metpy.dequantify(), zdim)
+    return S.metpy.dequantify()
+
+
+def wmo_tropopause_height(T, zg, zdim="level_full"):
+
+    # make sure vertical coordinate runs from low to high altitude
+    zg_mean = zg.mean(dim=[d for d in zg.dims if d != zdim])
+    if zg_mean.diff(zdim).mean() < 0:
+        T = T.isel({zdim: slice(None, None, -1)})
+        zg = zg.isel({zdim: slice(None, None, -1)})
+
+    # levels where lapse rate <= 2 K km-1
+    z_km = zg / 1000.0 # convert height to km
+    lapse_rate = - dxdy(T, z_km, dim=zdim)
+    x = lapse_rate <= 2
+
+    def find_tropopause(z, x):
+        candidates = np.flatnonzero(x & ~np.r_[False, x[:-1]]) # first instances
+        for c in candidates:
+            z0 = z[c]
+            z1 = z0 + 2
+            mask = np.logical_and(z>=z0, z<=z1)
+            lapse_above = x[mask]
+            if lapse_above.mean() == 1:
+                return z0
+        return np.nan
+
+    tropopause = xr.apply_ufunc(
+        find_tropopause,
+        z_km,
+        x,
+        input_core_dims=[[zdim], [zdim]],
+        output_core_dims=[[]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[float],
+    )
+
+    tropopause.attrs = dict(units="km", long_name="tropopause height", definition="WMO lapse-rate tropopause")
+    return tropopause

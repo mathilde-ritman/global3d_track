@@ -13,6 +13,8 @@ import glob
 from pathlib import Path
 import logging
 
+import easygems.healpix as egh
+
 # ---------- these ones help prep the field data ---------------- #
 
 def preprocess_for_tobac(dataset):
@@ -47,21 +49,26 @@ def add_height_data(dataset, height_values):
 
 
 def load_tobac_data(variables, region, start_date, end_date, model_version='4008a'):
+
     # load data
     if model_version=='4008a':
         cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
         dataset = cat.ICON.ngc4008a(time="PT15M", zoom=9).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
         # ensure no repeats in the variables
+        if variables is None:
+            variables = list(dataset.data_vars)
         variables = list(set(list(variables) + ['zghalf','zg']))
         relevant_data = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
         # relevant_data = xr.concat(li, dim='time') - no longer needed regrid outputs ds, not list of ds
         data = preprocess_for_tobac(relevant_data)
         if 'cli' in data.data_vars and 'clw' in data.data_vars:
             data['cl'] = data.cli + data.clw
+
     elif model_version=='d3hp003feb':
         cat = intake.open_catalog('https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml')['online']
         dataset = cat.icon_d3hp003feb(time="PT15M", zoom=11).to_dask().sel(time=slice(start_date, end_date-timedelta(minutes=1)))
         dataset = dataset.rename({'wa':'wa_phy',})
+
     elif 'maor' in model_version:
         _, fstr = model_version.split(':')
         fpath = Path(fstr)
@@ -69,6 +76,7 @@ def load_tobac_data(variables, region, start_date, end_date, model_version='4008
         for v in data.data_vars:
             data[v].attrs.pop('standard_name', None)
             data[v].name = None
+
     elif 'sadhitro' in model_version:
         _, fstr = model_version.split(':')
         fpath = Path(fstr)
@@ -76,8 +84,22 @@ def load_tobac_data(variables, region, start_date, end_date, model_version='4008
         for v in data.data_vars:
             data[v].attrs.pop('standard_name', None)
             data[v].name = None
+
+    elif 'csu' in model_version:
+        cat = intake.open_catalog("https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml")["UK"]
+        _, fstr = model_version.split(':')
+        data = cat[fstr](time="PT15M", zoom=10).to_dask()[['qall','wa','ta']].sel(time=slice(start_date, end_date-timedelta(minutes=1)))
+        logging.info(f"Loaded CSU data for {start_date} to {end_date} with n times {data.time.size}")
+        data = regrid.Regrid(region).perform(data, zoom=10, resolution=0.05)
+        logging.info(f"Regridded")
+        data['qfrozen'] = data['qall'].where(data.ta<273.15) # freezing only
+        logging.info(f"Masked condensates")
+        for v in data.data_vars:
+            data[v].attrs = {}
+    
     else:
         raise ValueError("Model version not implemented")
+    
     return data
 
 

@@ -47,7 +47,8 @@ def perform(yaml_file, start_date, end_date):
     def get_files(regex):
         if len(glob.glob(regex)) == 0:
             return []
-        return utils.tools.sort_files([f for f in glob.glob(regex) if utils.tools.check_file_dates(f, start_date, end_date)])
+        # return utils.tools.sort_files([f for f in glob.glob(regex) if utils.tools.check_file_dates(f, start_date, end_date)])
+        return sorted([f for f in glob.glob(regex)])
     
     link_fname_suffix = '_linked'
         

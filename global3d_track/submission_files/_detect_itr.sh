@@ -4,9 +4,9 @@
 # University of Oxford
 
 #SBATCH --job-name=detect_itr
-#SBATCH --partition=shared
+#SBATCH --partition=compute
 #SBATCH --time=01:00:00
-#SBATCH --mem=100GB
+#SBATCH --mem=300GB
 #SBATCH --account=bb1153
 #SBATCH --output=/home/b/b382635/job_outfiles/tracking/global3d_track/detect_segment/job.o%j
 
@@ -23,6 +23,14 @@
 
 # Maor [full 36 hours]:
 # [1H, 100GB, shared]
+
+# CSU high-res
+# [1H, 100GB, shared] OOM
+# [1H, 100GB, compute] OOM
+# [1H, 400GB, compute] Got through data loading
+# [1H, 400GB, compute] Failed after loading data
+# [1H, 400GB, compute] Now for just 2H of data, finished in 35 mins
+
 
 module load python3 
 source /home/b/b382635/.bashrc

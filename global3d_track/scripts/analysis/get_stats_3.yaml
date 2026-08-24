@@ -25,4 +25,4 @@ results:
 batch_system: 1 # number of systems to process at once
 system_wise_version: 'grl' # sets results directory and how to filter valid systems
 max_system_size: 2000 # (pixels) maximum size of a system to process
-start_idx: 1000 # (cloud number) where to start from
+start_idx: 700 # (cloud number) where to start from

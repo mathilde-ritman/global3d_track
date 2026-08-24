@@ -30,7 +30,6 @@ class Regrid:
             self.bbox = self.named_regions[region]
         else:
             self.bbox = region
-        logging.info(f"Region to regrid: {self.bbox}")
 
     def perform(self, data, zoom, resolution=0.1):
         self.pix = self._get_pix(
