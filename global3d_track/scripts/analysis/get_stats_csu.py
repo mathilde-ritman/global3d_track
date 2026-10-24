@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import intake
 import easygems.healpix as egh
+import multiprocessing as mp
 
 from ..src import utils, statistics
 
@@ -90,13 +91,14 @@ def get_dcc_properties(dcc_id, di, ds, mask, meta_di, savedir):
     lonx = meta_di['cld'][meta_di['cld'].dcc==dcc_id].longitude.max()
     
     # subset mask
-    mask = mask.sel(time=slice(times[0], times[-1]), lon=slice(lonn-2, lonx+2))
+    dx = 5
+    mask = mask.sel(time=slice(times[0], times[-1]), lon=slice(lonn-dx, lonx+dx))
     mask = mask.where(mask.system == dcc_id).dropna('time', how='all').dropna('lat', how='all').dropna('lon', how='all')
 
     # subset data
     times_plus = [times[0] - timedelta(minutes=15)] + times
     ds = ds.sel(time=slice(times_plus[0], times_plus[-1]))
-    bbox = (lonn-2, lonx+2, -15, 15)
+    bbox = (lonn-dx, lonx+dx, -15, 15)
     ds = utils.regrid.Regrid(bbox).perform(ds.drop_vars(["lat", "lon"], errors="ignore"), zoom=di['params']['zoom'], resolution=di['params']['resolution'])
     if 'qall' in ds.data_vars:
         ds['qfrozen'] = ds['qall'].where(ds.ta<273.15)
@@ -176,6 +178,7 @@ def main(yaml_file):
 
     # apply starting index
     start_idx = di.get('start_index', 0)
+    dcc_list = dcc_list[start_idx:]
 
     # report plan
     logging.info(f"{datetime.now()} Found {len(dcc_list)} DCCs to process, starting at index {start_idx} ({len(is_complete)} were already complete)")
@@ -194,9 +197,7 @@ def main(yaml_file):
     tracks = di['tracks']
     data_paths = [list(x.glob(f"*{tracks}.nc"))[0] for x in data_dirs]
     mask = xr.open_mfdataset(data_paths)
-    ### TEMP FIX ###
-    mask = mask.drop_duplicates(dim='time', keep='first')
-    ### TEMP FIX ###
+    mask = mask.drop_duplicates(dim='time', keep='first') ### TEMP FIX ###
     ds = ds.sel({di['params']['zdim']: mask[di['params']['zdim']]})
 
     if tracks == "system_tracks":
@@ -206,23 +207,24 @@ def main(yaml_file):
         dates = [x.name for x in data_dirs]
         meta_di = utils.tools.load_linked_records(data_dir, dates, tbcdir=tbc_dir)
 
-    logging.info(f"{datetime.now()} Starting calculations (iterating)...")
+    # logging.info(f"{datetime.now()} Starting calculations (iterating)...")
 
-    telapsed = []
-    for i in range(start_idx, len(dcc_list)):
-        dcc_id = dcc_list[i]
-        logging.info(f"{datetime.now()} Processing DCC {dcc_id} ({i}/{len(dcc_list)})")
-        start = time.perf_counter()
-        get_dcc_properties(dcc_id, di, ds, mask, meta_di, results_dir)
-        end = time.perf_counter()
-        telapsed.append(end - start)
-        logging.info(f"{datetime.now()} Saved results for DCC {dcc_id}| Time taken: {telapsed[-1]:.0f}s | Mean time: {np.mean(telapsed):.0f}s")
+    # telapsed = []
+    # for i in range(start_idx, len(dcc_list)):
+    #     dcc_id = dcc_list[i]
+    #     logging.info(f"{datetime.now()} Processing DCC {dcc_id} ({i}/{len(dcc_list)})")
+    #     start = time.perf_counter()
+    #     get_dcc_properties(dcc_id, di, ds, mask, meta_di, results_dir)
+    #     end = time.perf_counter()
+    #     telapsed.append(end - start)
+    #     logging.info(f"{datetime.now()} Saved results for DCC {dcc_id}| Time taken: {telapsed[-1]:.0f}s | Mean time: {np.mean(telapsed):.0f}s")
 
     N = di.get('max_workers', 1)
 
     logging.info(f"{datetime.now()} Starting calculations (multiprocessing with {N} workers)...")
     telapsed = []
-    with ProcessPoolExecutor(max_workers=N, initializer=init_worker, initargs=(di, ds, mask, meta_di, results_dir),) as executor:
+    ctx = mp.get_context("forkserver")
+    with ProcessPoolExecutor(max_workers=N, mp_context=ctx, initializer=init_worker, initargs=(di, ds, mask, meta_di, results_dir),) as executor:
         futures = {
             executor.submit(process_one, dcc_id): dcc_id
             for dcc_id in dcc_list[start_idx:]

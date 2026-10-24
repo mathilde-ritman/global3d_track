@@ -32,7 +32,7 @@ class GRLStats:
         self.CMF = calcs.CMF(grid_spacing=self.grid_spacings)
     
     def define_anvil(self, mask, tw):
-        abh = definitions.discover_abh(tw).mean('time') # calculate anvil base height from total condensate profile
+        abh = definitions.discover_abh_old(tw).mean('time') # calculate anvil base height from total condensate profile
         return mask.where(mask.level_full <= abh), abh
     
     def get_density(self, mask, data, name):

@@ -1,0 +1,114 @@
+2026-09-16T13:41:33 === monitor starting ===
+2026-09-16T13:51:36 Stream B: job 27491371 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T13:51:36   -> OOM: reduced max_workers 10 -> 9 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T13:51:36   -> submitted job 27492351 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T14:29:44 Stream A: job 27491370 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T14:29:44   -> OOM: reduced max_workers 10 -> 9 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T14:29:46   -> submitted job 27493182 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T14:37:47 Stream B: job 27492351 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T14:37:47   -> OOM: reduced max_workers 9 -> 8 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T14:37:48   -> submitted job 27493338 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T16:26:11 Stream B: job 27493338 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T16:26:11   -> OOM: reduced max_workers 8 -> 7 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T16:26:11   -> submitted job 27496606 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T16:40:14 Stream A: job 27493182 finished (sacct state=TIMEOUT) -> classified as 'timeout'
+2026-09-16T16:40:14   -> TIMEOUT: resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml unchanged
+2026-09-16T16:40:14   -> submitted job 27496875 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T21:39:17 Stream B: job 27496606 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T21:39:17   -> OOM: reduced max_workers 7 -> 6 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T21:39:17   -> submitted job 27502257 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-16T22:27:27 Stream A: job 27496875 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T22:27:27   -> OOM: reduced max_workers 9 -> 8 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T22:27:27   -> submitted job 27502697 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T23:43:43 Stream A: job 27502697 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-16T23:43:43   -> OOM: reduced max_workers 8 -> 7 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-16T23:43:43   -> submitted job 27503644 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T00:41:56 Stream B: job 27502257 finished (sacct state=TIMEOUT) -> classified as 'timeout'
+2026-09-17T00:41:56   -> TIMEOUT: resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml unchanged
+2026-09-17T00:41:58   -> submitted job 27504071 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T00:49:59 Stream A: job 27503644 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T00:49:59   -> OOM: reduced max_workers 7 -> 6 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T00:49:59   -> submitted job 27504117 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T02:08:15 Stream A: job 27504117 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T02:08:16   -> OOM: reduced max_workers 6 -> 5 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T02:08:19   -> submitted job 27504755 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T02:46:27 Stream B: job 27504071 finished (sacct state=TIMEOUT) -> classified as 'timeout'
+2026-09-17T02:46:27   -> TIMEOUT: resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml unchanged
+2026-09-17T02:46:28   -> submitted job 27505017 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T03:26:35 Stream A: job 27504755 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T03:26:35   -> OOM: reduced max_workers 5 -> 4 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T03:26:36   -> submitted job 27505275 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T04:26:48 Stream B: job 27505017 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T04:26:48   -> OOM: reduced max_workers 6 -> 5 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T04:26:48   -> submitted job 27505875 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T05:00:55 Stream A: job 27505275 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T05:00:55   -> OOM: reduced max_workers 4 -> 3 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T05:00:55   -> submitted job 27506010 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T05:49:05 Stream B: job 27505875 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T05:49:05   -> OOM: reduced max_workers 5 -> 4 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T05:49:07   -> submitted job 27506232 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T06:25:14 Stream A: job 27506010 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T06:25:14   -> OOM: reduced max_workers 3 -> 2 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T06:25:16   -> submitted job 27506424 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T06:59:23 Stream B: job 27506232 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T06:59:23   -> OOM: reduced max_workers 4 -> 3 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T06:59:23   -> submitted job 27506572 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T08:03:36 Stream A: job 27506424 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T08:03:36   -> OOM: reduced max_workers 2 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T08:03:40   -> submitted job 27507102 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T08:03:40 Stream B: job 27506572 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T08:03:40   -> OOM: reduced max_workers 3 -> 2 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T08:03:40   -> submitted job 27507104 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T09:19:56 Stream B: job 27507104 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T09:19:56   -> OOM: reduced max_workers 0 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T09:19:57   -> submitted job 27508139 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T09:40:01 Stream A: job 27507102 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T09:40:01   -> OOM: reduced max_workers 0 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T09:40:02   -> submitted job 27508708 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T12:34:39 Stream B: job 27508139 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T12:34:39   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T12:34:41   -> submitted job 27513618 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T19:56:15 Stream A: job 27508708 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T19:56:15   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T19:56:15   -> submitted job 27522239 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T21:34:36 Stream B: job 27513618 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T21:34:36   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T21:34:37   -> submitted job 27523387 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-17T23:53:06 Stream A: job 27522239 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-17T23:53:06   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-17T23:53:09   -> submitted job 27524838 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T02:01:37 Stream B: job 27523387 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T02:01:37   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T02:01:37   -> submitted job 27525951 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T03:15:53 Stream A: job 27524838 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T03:15:53   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T03:15:53   -> submitted job 27526955 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T04:38:11 Stream A: job 27526955 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T04:38:11   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T04:38:14   -> submitted job 27528030 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T04:52:17 Stream B: job 27525951 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T04:52:17   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T04:52:18   -> submitted job 27528138 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T05:50:30 Stream A: job 27528030 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T05:50:30   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T05:50:30   -> submitted job 27528787 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T06:16:36 Stream B: job 27528138 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T06:16:36   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T06:16:36   -> submitted job 27529057 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T08:13:01 Stream A: job 27528787 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T08:13:01   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T08:13:02   -> submitted job 27530171 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T08:27:05 Stream B: job 27529057 finished (sacct state=OUT_OF_MEMORY) -> classified as 'oom'
+2026-09-18T08:27:05   -> OOM: reduced max_workers 1 -> 1 in /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T08:27:05   -> submitted job 27530278 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T08:35:07 Stream B: job 27530278 finished (sacct state=CANCELLED by 250495) -> classified as 'anomaly'
+2026-09-18T08:35:07   -> unrecognised sacct state 'CANCELLED by 250495' (1/3); resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml unchanged as a safe default
+2026-09-18T08:35:07   -> submitted job 27530366 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T08:37:07 Stream A: job 27530171 finished (sacct state=CANCELLED by 250495) -> classified as 'anomaly'
+2026-09-18T08:37:07   -> unrecognised sacct state 'CANCELLED by 250495' (1/3); resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml unchanged as a safe default
+2026-09-18T08:37:07   -> submitted job 27530384 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml
+2026-09-18T08:37:08 Stream B: job 27530366 finished (sacct state=CANCELLED by 250495) -> classified as 'anomaly'
+2026-09-18T08:37:08   -> unrecognised sacct state 'CANCELLED by 250495' (2/3); resubmitting /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml unchanged as a safe default
+2026-09-18T08:37:08   -> submitted job 27530385 for /home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml
+2026-09-18T09:19:16 STOP file found - exiting monitor loop.
+2026-09-18T09:19:16 === monitor stopped ===

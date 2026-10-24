@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 
 
-def load_stats(files, variables=[], batch=None, size=None, apply=None, sidx_list=None, sidx_ignore=[], n_clouds=1):
+def load_stats(files, variables=[], batch=None, size=None, apply=None, sidx_list=None, sidx_ignore=[], n_clouds=1, regex=r'_(\d+)\.nc$'):
 
     # get file list
-    regex = r'_(\d+)\.0.nc$'
     if isinstance(files, str) or isinstance(files, pathlib.Path):
         flist = glob.glob(str(files)+'/*')
         files = sorted(flist, key=lambda x: int(re.search(regex, x).group(1)))
@@ -40,13 +39,15 @@ def load_stats(files, variables=[], batch=None, size=None, apply=None, sidx_list
     for fname in files:
         try:
             ds = xr.open_dataset(fname)
-            sidx = int(re.search(regex, pathlib.Path(fname).name).group(1))
-            ds['system'] = sidx
+            if not "system" in ds.dims:
+                sidx = int(re.search(regex, pathlib.Path(f).name).group(1))
+                ds["system"] = sidx
             if variables:
                 ds = ds[variables]
             if callable(apply):
                 ds = apply(ds)
-            ds = ds.expand_dims(system=[sidx])
+            if "system" not in ds.dims:
+                ds = ds.expand_dims(system=[ds.system.item()])
             datasets.append(ds)
         except Exception as e:
             logging.warning(f"skipping {fname} with exception: {e}")

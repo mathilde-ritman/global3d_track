@@ -89,11 +89,17 @@ def load_tobac_data(variables, region, start_date, end_date, model_version='4008
         cat = intake.open_catalog("https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml")["UK"]
         _, fstr = model_version.split(':')
         data = cat[fstr](time="PT15M", zoom=10).to_dask()[['qall','wa','ta']].sel(time=slice(start_date, end_date-timedelta(minutes=1)))
-        logging.info(f"Loaded CSU data for {start_date} to {end_date} with n times {data.time.size}")
         data = regrid.Regrid(region).perform(data, zoom=10, resolution=0.05)
-        logging.info(f"Regridded")
         data['qfrozen'] = data['qall'].where(data.ta<273.15) # freezing only
-        logging.info(f"Masked condensates")
+        for v in data.data_vars:
+            data[v].attrs = {}
+
+    elif 'ecomip' in model_version:
+        _, version = model_version.split(':')
+        cat = intake.open_catalog("https://digital-earths-global-hackathon.github.io/catalog/catalog.yaml")["UK"]
+        ds = cat.icon_d3hp003aug(time="PT15M", zoom=10).to_dask().pipe(egh.attach_coords).sel(pressure=slice(5000, 100000), time=slice(start_date, end_date-timedelta(minutes=1)))[['wa','qall','ta','zg','rlut','hus']]
+        ds = regrid.Regrid(region).perform(ds, zoom=10, resolution=0.05)
+        data = ecomip_data_versions(ds, version)
         for v in data.data_vars:
             data[v].attrs = {}
     
@@ -102,6 +108,61 @@ def load_tobac_data(variables, region, start_date, end_date, model_version='4008
     
     return data
 
+
+def ecomip_data_versions(ds, version):
+    from ..statistics import calculations as calcs
+
+    if version == '2d_olr':
+        return ds.rename({'rlut':'olr'})[['olr']]
+
+    ds['qfrozen'] = ds['qall'].where(ds.ta<273.15)
+        
+    if version == '3d_5xy_15min':
+        return ds[['wa','qfrozen']]
+
+    ds['iwp'] = (calcs.xWC(ds.rename({'pressure':'pfull'}), v='qfrozen', output='5km') * ds.zg.diff('pressure')).sum('pressure')
+    ds['wmax'] = ds.wa.max('pressure')
+
+    if version == '2d_5xy_15min':
+        return ds[['wmax','iwp']]
+
+    if version == '2d_5xy_30min':
+        return ds[['wmax','iwp']].isel(time=ds.time.values[::2])
+        
+    if version == '2d_5xy_60min':
+        return ds[['wmax','iwp']].isel(time=ds.time.values[::4])
+
+    ds = ds[['wa','qall','ta','zg','hus']].coarsen({'lat':2, 'lon':2}, boundary='trim').mean()
+    ds['iwp'] = (calcs.xWC(ds.rename({'pressure':'pfull'}), v='qfrozen', output='5km') * ds.zg.diff('pressure')).sum('pressure')
+    ds['wmax'] = ds.wa.max('pressure')
+
+    if version == '2d_10xy_15min':
+        return ds[['wmax','iwp']]
+        
+    if version == '2d_10xy_30min':
+        return ds[['wmax','iwp']].isel(time=ds.time.values[::2])
+
+    if version == '2d_10xy_60min':
+        return ds[['wmax','iwp']].isel(time=ds.time.values[::4])
+
+
+def file_contains_dates(fpath, start, end):
+    ''' Check if file is within time range '''
+    # datetimes spanned
+    fname = fpath.split('/')[-1]
+    str_segs = fname.split('_')
+    fdates = [datetime.strptime(x, "%Y%m%dT%H%M") for x in str_segs if 'T' in x]
+    fstart = min(fdates)
+    fend = max(fdates)
+    # is within time range
+    is_within = False
+    # starts within file
+    if fstart <= start and start <= fend:
+        is_within = True
+    # ends within file
+    if fstart <= end and end <= fend:
+        is_within = True
+    return is_within
 
 def load_corresponding_data(mask, region=None, variables=['cli','clw'], preceeding_mins=0):
     # times
@@ -124,25 +185,6 @@ def load_corresponding_data(mask, region=None, variables=['cli','clw'], preceedi
         variables = list(dataset.data_vars)
     data = regrid.Regrid(region).perform(dataset[variables], zoom=9, resolution=0.1)
     return data
-
-
-def file_contains_dates(fpath, start, end):
-    ''' Check if file is within time range '''
-    # datetimes spanned
-    fname = fpath.split('/')[-1]
-    str_segs = fname.split('_')
-    fdates = [datetime.strptime(x, "%Y%m%dT%H%M") for x in str_segs if 'T' in x]
-    fstart = min(fdates)
-    fend = max(fdates)
-    # is within time range
-    is_within = False
-    # starts within file
-    if fstart <= start and start <= fend:
-        is_within = True
-    # ends within file
-    if fstart <= end and end <= fend:
-        is_within = True
-    return is_within
 
 def grab_system(s, data_dir):
 

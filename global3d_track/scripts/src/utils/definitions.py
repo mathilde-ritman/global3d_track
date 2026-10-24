@@ -43,37 +43,40 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message
 #     return ds
 
 
-# #### ------------------------ helpers ------------------------ ####
+# #### ------------------------ old version ------------------------ ####
 
-# def derivative(da, smooth=True, interp=False, verbose=False):
-#     if da.level_full[0] == 90:
-#         # ensure values increasing
-#         da = da.sel(level_full = da.level_full[::-1])
-#     if interp:
-#         n,x = da.level_full[0].item(), da.level_full[-1].item()
-#         da_interp = da.interp(level_full=np.arange(n, x+.5, .5), method='linear')
-#         da = da_interp
-#     if smooth:
-#         da_smooth = da.rolling(level_full=3, center=True).mean('level_full')
-#         da = da_smooth
-#     da = da.compute().differentiate('level_full') * -1
-#     da = da.sel(level_full = da.level_full[::-1])
-#     da.attrs['positive'] = 'up'
-#     return da
+def derivative_old(da, smooth=True, interp=False, verbose=False):
+    if da.level_full[0] == 90:
+        # ensure values increasing
+        da = da.sel(level_full = da.level_full[::-1])
+    if interp:
+        n,x = da.level_full[0].item(), da.level_full[-1].item()
+        da_interp = da.interp(level_full=np.arange(n, x+.5, .5), method='linear')
+        da = da_interp
+    if smooth:
+        da_smooth = da.rolling(level_full=3, center=True).mean('level_full')
+        da = da_smooth
+    da = da.compute().differentiate('level_full') * -1
+    da = da.sel(level_full = da.level_full[::-1])
+    da.attrs['positive'] = 'up'
+    return da
 
-# def discover_abh(da, zdim='level_full'):
-#     # determines the anvil base height as the minima that precedes the hightest maxima in cloud condensate
-#     da = da.compute()
-#     # derivative
-#     d = derivative(da, verbose=True)
-#     # find minima and maxima (approx)
-#     maxima = (d > 0) & (d.shift(level_full=-1) <= 0)
-#     minima = (d <= 0) & (d.shift(level_full=-1) > 0)
-#     # find minima that precedes the last maxima, assumming the latter represents the anvil!
-#     last_max = maxima.sel(level_full=maxima.level_full[::-1]).idxmax('level_full')
-#     minima_below = minima.where(minima.level_full >= last_max)
-#     abh = minima_below.sel(level_full=minima_below.level_full[::-1]).idxmax('level_full')
-#     return abh
+def discover_abh_old(da, zdim='level_full'):
+    # determines the anvil base height as the minima that precedes the hightest maxima in cloud condensate
+    da = da.compute()
+    # derivative
+    d = derivative_old(da, verbose=True)
+    # find minima and maxima (approx)
+    maxima = (d > 0) & (d.shift(level_full=-1) <= 0)
+    minima = (d <= 0) & (d.shift(level_full=-1) > 0)
+    # find minima that precedes the last maxima, assumming the latter represents the anvil!
+    last_max = maxima.sel(level_full=maxima.level_full[::-1]).idxmax('level_full')
+    minima_below = minima.where(minima.level_full >= last_max)
+    abh = minima_below.sel(level_full=minima_below.level_full[::-1]).idxmax('level_full')
+    return abh
+
+
+# #### ------------------------ new version ------------------------ ####
 
 
 import numpy as np
@@ -87,7 +90,7 @@ def discover_abh(tw, zdim="level_full"):
 
     d = derivative(tw, zdim=zdim)
     
-    zero = 1e-3
+    zero = 1e-10
     is_max = (d > zero)
     is_min = (d <= -zero)
     if zdim == "level_full":
@@ -122,6 +125,6 @@ def define_anvil(mask, zg, tw, zdim="level_full"):
 
     # apply threshold
     levels_above_it = tw[zdim].sel({zdim: slice(abh, None)})
-    anvil = mask.where(mask[zdim].isin(levels_above_it))
+    anvil = mask & mask[zdim].isin(levels_above_it)
     
     return anvil, levels_above_it[0]

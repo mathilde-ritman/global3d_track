@@ -1,0 +1,29 @@
+# config to re-run GRLStats for every DCC that already has a saved statistics
+# file in results_directory/folder, correcting the anvil-masking bug fixed in
+# definitions.define_anvil(). Points at the same location get_stats_grl.py/
+# get_stats_grl1000.yaml already populated.
+
+data_directory: /work/bb1153/b382635/data/final_tracks
+results_directory: /work/bb1153/b382635/data/track_statistics
+folder: grl/resubmission
+
+dcc_list_csv: /home/b/b382635/s/my_notebooks/model_paper/grl_submission/scripts/anvil_ids.csv
+completed_csv: /home/b/b382635/s/my_notebooks/model_paper/grl_submission/scripts/anvil_ids_completed_500.csv
+
+region: tropics
+version_name: dcc_frozen_1e4
+
+radius: 2 # in degrees
+
+params:
+  dxy: 11000
+  dz: 300
+  resolution: 0.1
+  zoom: 9
+  zdim: 'level_full'
+  pname: 'pfull'
+
+# which/how to process
+max_workers: 8
+max_tasks_per_child: 20
+start_index: 500 # where to start from

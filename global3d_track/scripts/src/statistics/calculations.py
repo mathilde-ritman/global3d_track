@@ -277,6 +277,11 @@ def dxdy(X, Y, dim="level_full"):
 
 def static_stability(T, p, zdim='level_full'):
     ''' calculate static stability (T/theta dtheta/dp) in K/Pa '''
+    # make sure vertical coordinate runs from low to high altitude
+    p_mean = p.mean(dim=[d for d in p.dims if d != zdim])
+    if p_mean.diff(zdim).mean() > 0:
+        p = p.isel({zdim: slice(None, None, -1)})
+        T = T.isel({zdim: slice(None, None, -1)})
     p = p * units.Pa
     T = T * units.kelvin
     theta = metpy.calc.potential_temperature(p, T)

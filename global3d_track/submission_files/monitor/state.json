@@ -1,0 +1,60 @@
+{
+  "split_counter": 0,
+  "streams": {
+    "A": {
+      "yaml": "/home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl.yaml",
+      "job_id": "27530384",
+      "status": "active",
+      "consecutive_anomalies": 1,
+      "history": [
+        "pre-existing job at monitor start",
+        "job 27491370: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27493182: sacct=TIMEOUT outcome=timeout",
+        "job 27496875: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27502697: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27503644: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27504117: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27504755: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27505275: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27506010: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27506424: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27507102: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27508708: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27522239: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27524838: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27526955: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27528030: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27528787: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27530171: sacct=CANCELLED by 250495 outcome=anomaly"
+      ]
+    },
+    "B": {
+      "yaml": "/home/b/b382635/s/global3d_track/global3d_track/scripts/analysis/get_stats_grl1000.yaml",
+      "job_id": "27530385",
+      "status": "active",
+      "consecutive_anomalies": 2,
+      "history": [
+        "pre-existing job at monitor start",
+        "job 27491371: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27492351: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27493338: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27496606: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27502257: sacct=TIMEOUT outcome=timeout",
+        "job 27504071: sacct=TIMEOUT outcome=timeout",
+        "job 27505017: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27505875: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27506232: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27506572: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27507104: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27508139: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27513618: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27523387: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27525951: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27528138: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27529057: sacct=OUT_OF_MEMORY outcome=oom",
+        "job 27530278: sacct=CANCELLED by 250495 outcome=anomaly",
+        "job 27530366: sacct=CANCELLED by 250495 outcome=anomaly"
+      ]
+    }
+  }
+}
